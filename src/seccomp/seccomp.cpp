@@ -154,4 +154,3 @@ int installNotifyFilter(void)
 
     return notifyFd;
 }
-

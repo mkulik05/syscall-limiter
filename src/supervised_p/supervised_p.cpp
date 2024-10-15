@@ -111,23 +111,21 @@ void ProcessManager::process_starter(int sockPair[2]) {
         perror("msgget");
         return;
     }
+
     int notifyFd = installNotifyFilter();
 
     if (sendfd(sockPair[0], notifyFd) == -1)
         err(EXIT_FAILURE, "sendfd");
-    std::cout << "++++++++++++++";
 
     if (close(notifyFd) == -1)
         err(EXIT_FAILURE, "close-target-notify-fd");
 
-    std::cout << "-----------";
     closeSocketPair(sockPair);
 
     struct msg_buffer message;
 
     long counter = 1;
     for (;;) {
-        std::cout << "############";
         size_t n = msgrcv(msgid, &message, sizeof(message.msg_text), counter, 0);
         if (n == -1) {
             perror("msgrcv");

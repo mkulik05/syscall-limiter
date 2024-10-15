@@ -36,8 +36,6 @@ void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
     bool pathOK;
     char path[PATH_MAX];
     pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
-
-    resp->id = req->id;
     resp->flags = 0;
     resp->val = 0;
 
@@ -95,7 +93,7 @@ void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
     if (nread != -1)
         path[nread] = '\0'; // Null-terminate the path
 
-    resp->id = req->id;
+    
     // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
     resp->val = 0;
 
@@ -123,6 +121,20 @@ void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
     }
 }
 
+bool isProcessRunning(pid_t pid) {
+    
+    if (kill(pid, 0) == 0) {
+        
+        return true;
+    } else if (errno == ESRCH) {
+        
+        return false;
+    } else {
+        
+        return true;
+    }
+}
+
 void handleNotifications(int notifyFd, pid_t starter_pid)
 {
 
@@ -147,6 +159,7 @@ void handleNotifications(int notifyFd, pid_t starter_pid)
         printf("\tS: got notification (ID %#llx) for PID %d\n",
                req->id, req->pid);
 
+        resp->id = req->id;
         // Code that starts processes is allowed to execute any syscall
         if (req->pid == starter_pid)
         {
@@ -159,9 +172,9 @@ void handleNotifications(int notifyFd, pid_t starter_pid)
         {
             switch (req->data.nr)
             {
-            case SYS_mkdir:
-                handle_mkdir(req, resp, notifyFd);
-                break;
+            // case SYS_mkdir:
+            //     handle_mkdir(req, resp, notifyFd);
+            //     break;
 
             case SYS_write:
                 handle_write(req, resp, notifyFd);
@@ -171,11 +184,10 @@ void handleNotifications(int notifyFd, pid_t starter_pid)
                 resp->error = 0;
                 resp->val = 0;
                 resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-                // printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
+                printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
                 break;
             }
         }
-
         if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
         {
             if (errno == ENOENT)
