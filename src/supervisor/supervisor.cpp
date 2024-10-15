@@ -30,21 +30,113 @@
 #include "../seccomp/seccomp.h"
 #include "../supervised_p/supervised_p.h"
 
-void handleNotifications(int notifyFd)
+void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
 {
+    printf("\tS: intercepted mkdir system call\n");
     bool pathOK;
     char path[PATH_MAX];
+    pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
+
+    resp->id = req->id;
+    resp->flags = 0;
+    resp->val = 0;
+
+    if (!pathOK)
+    {
+        resp->error = -EINVAL;
+        printf("\tS: spoofing error for invalid pathname (%s)\n",
+               strerror(-resp->error));
+    }
+    else if (strncmp(path, "/tmp/", strlen("/tmp/")) == 0)
+    {
+        printf("\tS: executing: mkdir(\"%s\", %#llo)\n",
+               path, req->data.args[1]);
+
+        if (mkdir(path, req->data.args[1]) == 0)
+        {
+            resp->error = 0;
+            resp->val = strlen(path);
+            printf("\tS: success! spoofed return = %lld\n", resp->val);
+        }
+        else
+        {
+            resp->error = -errno;
+            printf("\tS: failure! (errno = %d; %s)\n", errno, strerror(errno));
+        }
+    }
+    else if (strncmp(path, "./", strlen("./")) == 0)
+    {
+        resp->error = resp->val = 0;
+        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+        printf("\tS: target can execute system call\n");
+    }
+    else
+    {
+        resp->error = -EOPNOTSUPP;
+        printf("\tS: spoofing error response (%s)\n", strerror(-resp->error));
+    }
+
+    printf("\tS: sending response (flags = %#x; val = %lld; error = %d)\n",
+           resp->flags, resp->val, resp->error);
+}
+
+void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
+{
+    // printf("\tS: intercepted write system call\n");
+    bool pathOK;
+    char path[PATH_MAX];
+
+    int fd = req->data.args[0]; // Get file descriptor
+    char fdPath[PATH_MAX];
+
+    // Retrieve the pathname corresponding to the file descriptor
+    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
+    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
+    if (nread != -1)
+        path[nread] = '\0'; // Null-terminate the path
+
+    resp->id = req->id;
+    // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+    resp->val = 0;
+
+    if (nread == -1)
+    {
+        resp->error = 0;
+        resp->val = 0;
+        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+        // printf("\tS: unable to resolve file descriptor path (%s)\n", strerror(errno));
+    }
+    else if (strncmp(path, "/tmp/", strlen("/tmp/")) == 0)
+    {
+        // Deny write access to files in /home/a/own_files/
+        resp->error = -EACCES;
+        resp->flags = 0;
+        // printf("\tS: denying write to %s (EACCES)\n", path);
+    }
+    else
+    {
+        // Allow the write if it's not in /home/a/own_files/
+        resp->error = 0;
+        resp->val = 0;
+        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+        // printf("\tS: allowing write to %s\n", path);
+    }
+}
+
+void handleNotifications(int notifyFd, pid_t starter_pid)
+{
+
     struct seccomp_notif *req;
     struct seccomp_notif_resp *resp;
     struct seccomp_notif_sizes sizes;
 
     allocSeccompNotifBuffers(&req, &resp, &sizes);
 
-    /* Loop handling notifications */
-    std::cout << "fmdsio";
+    std::cout << "Started" << std::endl;
     for (;;)
     {
         memset(req, 0, sizes.seccomp_notif);
+        std::cout << "Waiting for msgs on: " << notifyFd <<  std::endl;
         if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1)
         {
             if (errno == EINTR)
@@ -55,168 +147,48 @@ void handleNotifications(int notifyFd)
         printf("\tS: got notification (ID %#llx) for PID %d\n",
                req->id, req->pid);
 
-        // Handle mkdir system call
-        if (req->data.nr == SYS_mkdir)
+        // Code that starts processes is allowed to execute any syscall
+        if (req->pid == starter_pid)
         {
-
-            printf("\tS: intercepted mkdir system call\n");
-
-            pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
-
-            resp->id = req->id;
-            resp->flags = 0;
-            resp->val = 0;
-
-            if (!pathOK)
-            {
-                resp->error = -EINVAL;
-                printf("\tS: spoofing error for invalid pathname (%s)\n",
-                       strerror(-resp->error));
-            }
-            else if (strncmp(path, "/tmp/", strlen("/tmp/")) == 0)
-            {
-                printf("\tS: executing: mkdir(\"%s\", %#llo)\n",
-                       path, req->data.args[1]);
-
-                if (mkdir(path, req->data.args[1]) == 0)
-                {
-                    resp->error = 0;
-                    resp->val = strlen(path);
-                    printf("\tS: success! spoofed return = %lld\n", resp->val);
-                }
-                else
-                {
-                    resp->error = -errno;
-                    printf("\tS: failure! (errno = %d; %s)\n", errno, strerror(errno));
-                }
-            }
-            else if (strncmp(path, "./", strlen("./")) == 0)
-            {
-                resp->error = resp->val = 0;
-                resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-                printf("\tS: target can execute system call\n");
-            }
-            else
-            {
-                resp->error = -EOPNOTSUPP;
-                printf("\tS: spoofing error response (%s)\n", strerror(-resp->error));
-            }
-
-            printf("\tS: sending response (flags = %#x; val = %lld; error = %d)\n",
-                   resp->flags, resp->val, resp->error);
-
-            if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
-            {
-                if (errno == ENOENT)
-                    printf("\tS: response failed with ENOENT; "
-                           "perhaps target process's syscall was "
-                           "interrupted by a signal?\n");
-                else
-                    perror("ioctl-SECCOMP_IOCTL_NOTIF_SEND");
-            }
-        }
-        // Handle write system call
-        else if (req->data.nr == SYS_write)
-        {
-            printf("\tS: intercepted write system call\n");
-            
-            int fd = req->data.args[0]; // Get file descriptor
-            char fdPath[PATH_MAX];
-
-            // Retrieve the pathname corresponding to the file descriptor
-            snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
-            ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
-            if (nread != -1)
-                path[nread] = '\0'; // Null-terminate the path
-
-            resp->id = req->id;
-            // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-            resp->val = 0;
-
-            if (nread == -1 || !pathOK)
-            {
-                resp->error = -EINVAL;
-                resp->flags = 0;
-                printf("\tS: unable to resolve file descriptor path (%s)\n", strerror(errno));
-            }
-            else if (strncmp(path, "/home/a/own_files/", strlen("/home/a/own_files/")) == 0)
-            {
-                // Deny write access to files in /home/a/own_files/
-                resp->error = -EACCES;
-                resp->flags = 0;
-                printf("\tS: denying write to %s (EACCES)\n", path);
-            }
-            else
-            {
-                // Allow the write if it's not in /home/a/own_files/
-                resp->error = 0;
-                resp->val = 0;
-                
-                printf("\tS: allowing write to %s\n", path);
-            }
-
-            if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
-            {
-                if (errno == ENOENT)
-                    printf("\tS: response failed with ENOENT; "
-                           "perhaps target process's syscall was "
-                           "interrupted by a signal?\n");
-                else
-                    perror("ioctl-SECCOMP_IOCTL_NOTIF_SEND");
-            }
-        }
-        else
-        {
-            // Unexpected system call
             resp->error = 0;
             resp->val = 0;
             resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-            printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
-
-            if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
+            std::cout << "Allowing " << req->data.nr << std::endl;
+        }
+        else
+        {
+            switch (req->data.nr)
             {
-                if (errno == ENOENT)
-                    printf("\tS: response failed with ENOENT; "
-                           "perhaps target process's syscall was "
-                           "interrupted by a signal?\n");
-                else
-                    perror("ioctl-SECCOMP_IOCTL_NOTIF_SEND");
+            case SYS_mkdir:
+                handle_mkdir(req, resp, notifyFd);
+                break;
+
+            case SYS_write:
+                handle_write(req, resp, notifyFd);
+                break;
+
+            default:
+                resp->error = 0;
+                resp->val = 0;
+                resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+                // printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
+                break;
             }
         }
 
-        if (strcmp(path, "/bye") == 0)
-            break;
+        if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
+        {
+            if (errno == ENOENT)
+                printf("\tS: response failed with ENOENT; "
+                       "perhaps target process's syscall was "
+                       "interrupted by a signal?\n");
+            else
+                perror("ioctl-SECCOMP_IOCTL_NOTIF_SEND");
+        }
     }
-
 
     free(req);
     free(resp);
     printf("\tS: terminating **********\n");
-    exit(EXIT_FAILURE);
-}
-
-
-void supervisor(int sockPair[2], void *addr)
-{
-    int notifyFd;
-
-    notifyFd = recvfd(sockPair[1]);
-    // int value = -1;
-    // int a = 0;
-    // while (value == -1) {
-    //     value = *(int*)addr;
-    //     std::cout << "Data: " << value << std::endl;
-    //     sleep(1);
-    //     if (++a > 7) {
-    //         break;
-    //     }
-    // }
-    // std::cout << "fjdsofnjkdsgfnjkdsngvjkfdsbn bgvjknfsgvjiklo";
-    // std::cout << value;
-    if (notifyFd == -1)
-        err(EXIT_FAILURE, "recvfd");
-
-    closeSocketPair(sockPair); /* We no longer need the socket pair */
-
-    handleNotifications(notifyFd);
+    exit(EXIT_SUCCESS);
 }

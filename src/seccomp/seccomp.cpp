@@ -111,38 +111,29 @@ bool cookieIsValid(int notifyFd, uint64_t id)
    The function return value is a file descriptor from which the
    user-space notifications can be fetched. */
 
-int
-installNotifyFilter(void)
+int installNotifyFilter(void)
 {
     int notifyFd;
 
     struct sock_filter filter[] = {
+
         X86_64_CHECK_ARCH_AND_LOAD_SYSCALL_NR,
-
-        /* Check for specific syscalls to trigger notification to user-space supervisor */
-
-        // Example for a few syscalls (expand as needed)
-
-        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_write, 0, 1),
-        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
-
-       
 
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mkdir, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_write, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
-        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_read, 0, 1),
-        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_write, 0, 1),
-        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_open, 0, 1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        // Add additional syscalls here...
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_fstat, 0, 1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_gettime, 0, 1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        /* Allow all other syscalls */
-        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
     };
 
@@ -153,10 +144,11 @@ installNotifyFilter(void)
 
     /* Install the filter with the SECCOMP_FILTER_FLAG_NEW_LISTENER flag;
        as a result, seccomp() returns a notification file descriptor. */
-
     notifyFd = seccomp(SECCOMP_SET_MODE_FILTER,
                        SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
-
+    
+    // DON'T CALL ANY SYSCALLS THERE
+    // notifyFd is not sent yet, so call with SECCOMP_RET_USER_NOTIF will just block
     if (notifyFd == -1)
         err(EXIT_FAILURE, "seccomp-install-notify-filter");
 

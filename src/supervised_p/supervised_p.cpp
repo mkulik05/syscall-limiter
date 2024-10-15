@@ -24,80 +24,130 @@
 #include <vector>
 #include <iostream>
 #include <sys/mman.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 
 #include "../assistance/assistance.h"
 #include "../supervisor/supervisor.h"
 #include "../seccomp/seccomp.h"
 #include "../supervised_p/supervised_p.h"
 
-/* Implementation of the target process; create a child process that:
-
-   (1) installs a seccomp filter with the
-       SECCOMP_FILTER_FLAG_NEW_LISTENER flag;
-   (2) writes the seccomp notification file descriptor returned from
-       the previous step onto the UNIX domain socket, 'sockPair[0]';
-   (3) calls mkdir(2) for each element of 'argv'.
-
-   The function return value in the parent is the PID of the child
-   process; the child does not return from this function. */
-
-pid_t targetProcess(int sockPair[2], char *argv[], void *addr)
+ProcessManager::ProcessManager()
 {
-    int notifyFd, s;
-    pid_t targetPid;
+    this->start_process_msg_type = 1;
+    int sockPair[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockPair) == -1)
+        err(EXIT_FAILURE, "socketpair");
 
-    targetPid = fork();
+    pid_t targetPid = fork();
 
     if (targetPid == -1)
         err(EXIT_FAILURE, "fork");
 
-    if (targetPid > 0) /* In parent, return PID of child */
-        return targetPid;
+    if (targetPid > 0) {
+        std::cout << "Process starter pid: " << targetPid << std::endl;
+        this->start_supervisor(sockPair, targetPid);
+        this->process_starter_pid = targetPid;
+        return;
+    }    
+    
+    this->process_starter(sockPair);
+    exit(EXIT_SUCCESS);
+}
 
-    /* Child falls through to here */
+void ProcessManager::start_supervisor(int sockPair[2], pid_t starter_pid) {
+    std::cout << 44 << " ";
+    pid_t targetPid = fork();
 
-    printf("T: PID = %ld\n", (long)getpid());
+    if (targetPid == -1)
+        err(EXIT_FAILURE, "fork");
 
-    /* Install seccomp filter(s) */
+    if (targetPid > 0) {
+        this->supervisor_pid = targetPid;
+        return;
+    }
+
+    std::cout << 45 << " ";
+    int notifyFd = recvfd(sockPair[1]);
+    std::cout << 46 << " " << notifyFd << std::endl;
+    if (notifyFd == -1)
+        err(EXIT_FAILURE, "recvfd");
+    std::cout << 47;
+    closeSocketPair(sockPair);
+
+    handleNotifications(notifyFd, starter_pid);
+}
+
+pid_t ProcessManager::startProcess(std::string cmd) {
+    key_t key = ftok("tmp222", START_PROCESS_IPC_VALUE);
+    int msgid = msgget(key, 0666 | IPC_CREAT);
+
+    if (msgid == -1) {
+        perror("msgget");
+        return 1;
+    }
+    std::cout << "LLLLL";
+    struct msg_buffer message;
+    message.msg_type = this->start_process_msg_type;
+    strncpy(message.msg_text, cmd.c_str(), sizeof(message.msg_text));
+    this->start_process_msg_type += 1;
+    if (msgsnd(msgid, &message, cmd.length(), 0) == -1) {
+        perror("msgsnd");
+        return 1;
+    }
+    return 0;
+}
+
+void ProcessManager::process_starter(int sockPair[2]) {
 
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
         err(EXIT_FAILURE, "prctl");
         
-    setbuf(stdout, NULL);
-    notifyFd = installNotifyFilter();
+    key_t key = ftok("tmp222", START_PROCESS_IPC_VALUE);
+    int msgid = msgget(key, 0666 | IPC_CREAT);
+    std::cout << std::endl<< msgid;
+    if (msgid == -1) {
+        std::cout << 543;
+        perror("msgget");
+        return;
+    }
+    int notifyFd = installNotifyFilter();
 
-    /* Pass the notification file descriptor to the tracing process over
-       a UNIX domain socket */
-
-    //*(int*)addr = notifyFd;
-    // std::cout << "Done";
-    // std::cout << notifyFd << std::endl;
-    // std::cout << *(int*)addr;
     if (sendfd(sockPair[0], notifyFd) == -1)
         err(EXIT_FAILURE, "sendfd");
-
-    // /* Notification and socket FDs are no longer needed in target */
+    std::cout << "++++++++++++++";
 
     if (close(notifyFd) == -1)
         err(EXIT_FAILURE, "close-target-notify-fd");
 
+    std::cout << "-----------";
     closeSocketPair(sockPair);
 
-    /* Perform a mkdir() call for each of the command-line arguments */
+    struct msg_buffer message;
 
-    for (char **ap = argv; *ap != NULL; ap++)
-    {
-        // printf("\nT: about to mkdir(\"%s\")\n", *ap);
+    long counter = 1;
+    for (;;) {
+        std::cout << "############";
+        size_t n = msgrcv(msgid, &message, sizeof(message.msg_text), counter, 0);
+        if (n == -1) {
+            perror("msgrcv");
+            return;
+        }
+        std::string command = message.msg_text;
 
-        s = mkdir(*ap, 0700);
-        // s = mkdir(*ap, 0700);
-        // s = mkdir(*ap, 0700);
-        if (s == -1)
-            perror("T: ERROR: mkdir(2)");
-        else
-            printf("T: SUCCESS: mkdir(2) returned %d\n", s);
+        std::cout << "Command: " << command.substr(0, n) << "'" << std::endl;
+        pid_t targetPid = fork();
+        if (targetPid == -1) {
+            perror("fork");
+            break;
+        }
+        
+        // TODO: return pid of created process
+        if (targetPid == 0) {   
+            execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
+            exit(EXIT_SUCCESS);
+        }
+        counter++;
     }
 
-    printf("\nT: terminating\n");
-    exit(EXIT_SUCCESS);
 }
