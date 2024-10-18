@@ -25,10 +25,10 @@
 #include <iostream>
 #include <sys/mman.h>
 
-#include "../assistance/assistance.h"
-#include "../supervisor/supervisor.h"
-#include "../seccomp/seccomp.h"
-#include "../supervised_p/supervised_p.h"
+#include "../../assistance/assistance.h"
+#include "../../Supervisor/Manager/Supervisor.h"
+#include "../../seccomp/seccomp.h"
+#include "../../ProcessManager/ProcessManager.h"
 
 void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
 {
@@ -121,86 +121,47 @@ void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
     }
 }
 
-bool isProcessRunning(pid_t pid) {
-    
-    if (kill(pid, 0) == 0) {
-        
-        return true;
-    } else if (errno == ESRCH) {
-        
-        return false;
-    } else {
-        
-        return true;
-    }
-}
 
-void handleNotifications(int notifyFd, pid_t starter_pid)
+void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
 {
+    // printf("\tS: intercepted write system call\n");
+    bool pathOK;
+    char path[PATH_MAX];
 
-    struct seccomp_notif *req;
-    struct seccomp_notif_resp *resp;
-    struct seccomp_notif_sizes sizes;
+    int fd = req->data.args[0]; // Get file descriptor
+    char fdPath[PATH_MAX];
 
-    allocSeccompNotifBuffers(&req, &resp, &sizes);
+    // Retrieve the pathname corresponding to the file descriptor
+    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
+    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
+    if (nread != -1)
+        path[nread] = '\0'; // Null-terminate the path
 
-    std::cout << "Started" << std::endl;
-    for (;;)
+    std::cout << path;
+    // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+    resp->val = 0;
+
+    if (nread == -1)
     {
-        memset(req, 0, sizes.seccomp_notif);
-        std::cout << "Waiting for msgs on: " << notifyFd <<  std::endl;
-        if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1)
-        {
-            if (errno == EINTR)
-                continue;
-            err(EXIT_FAILURE, "ioctl-SECCOMP_IOCTL_NOTIF_RECV");
-        }
-
-        printf("\tS: got notification (ID %#llx) for PID %d\n",
-               req->id, req->pid);
-
-        resp->id = req->id;
-        // Code that starts processes is allowed to execute any syscall
-        if (req->pid == starter_pid)
-        {
-            resp->error = 0;
-            resp->val = 0;
-            resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-            std::cout << "Allowing " << req->data.nr << std::endl;
-        }
-        else
-        {
-            switch (req->data.nr)
-            {
-            // case SYS_mkdir:
-            //     handle_mkdir(req, resp, notifyFd);
-            //     break;
-
-            case SYS_write:
-                handle_write(req, resp, notifyFd);
-                break;
-
-            default:
-                resp->error = 0;
-                resp->val = 0;
-                resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-                printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
-                break;
-            }
-        }
-        if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
-        {
-            if (errno == ENOENT)
-                printf("\tS: response failed with ENOENT; "
-                       "perhaps target process's syscall was "
-                       "interrupted by a signal?\n");
-            else
-                perror("ioctl-SECCOMP_IOCTL_NOTIF_SEND");
-        }
+        resp->error = 0;
+        resp->val = 0;
+        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+        // printf("\tS: unable to resolve file descriptor path (%s)\n", strerror(errno));
     }
-
-    free(req);
-    free(resp);
-    printf("\tS: terminating **********\n");
-    exit(EXIT_SUCCESS);
+    else if (strncmp(path, "/tmp", strlen("/tmp")) == 0)
+    {
+        // Deny write access to files in /home/a/own_files/
+        // for (;;) {}
+        resp->error = -EACCES;
+        resp->flags = 0;
+        // printf("\tS: denying write to %s (EACCES)\n", path);
+    }
+    else
+    {
+        // Allow the write if it's not in /home/a/own_files/
+        resp->error = 0;
+        resp->val = 0;
+        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+        // printf("\tS: allowing write to %s\n", path);
+    }
 }

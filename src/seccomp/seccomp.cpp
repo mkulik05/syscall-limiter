@@ -26,9 +26,9 @@
 #include <sys/mman.h>
 
 #include "../assistance/assistance.h"
-#include "../supervisor/supervisor.h"
+#include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
-#include "../supervised_p/supervised_p.h"
+#include "../ProcessManager/ProcessManager.h"
 
 /* Allocate buffers for the seccomp user-space notification request and
    response structures. It is the caller's responsibility to free the
@@ -128,7 +128,9 @@ int installNotifyFilter(void)
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_open, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_fstat, 0, 1),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_getdents64, 0, 1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_getdents, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
         
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_gettime, 0, 1),

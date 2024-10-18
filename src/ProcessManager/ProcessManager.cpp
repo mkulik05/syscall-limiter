@@ -28,9 +28,9 @@
 #include <sys/msg.h>
 
 #include "../assistance/assistance.h"
-#include "../supervisor/supervisor.h"
+#include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
-#include "../supervised_p/supervised_p.h"
+#include "../ProcessManager/ProcessManager.h"
 
 ProcessManager::ProcessManager()
 {
@@ -39,12 +39,14 @@ ProcessManager::ProcessManager()
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockPair) == -1)
         err(EXIT_FAILURE, "socketpair");
 
+    
     pid_t targetPid = fork();
 
     if (targetPid == -1)
         err(EXIT_FAILURE, "fork");
 
     if (targetPid > 0) {
+        this->supervisor = new Supervisor(targetPid);
         std::cout << "Process starter pid: " << targetPid << std::endl;
         this->start_supervisor(sockPair, targetPid);
         this->process_starter_pid = targetPid;
@@ -75,7 +77,7 @@ void ProcessManager::start_supervisor(int sockPair[2], pid_t starter_pid) {
     std::cout << 47;
     closeSocketPair(sockPair);
 
-    handleNotifications(notifyFd, starter_pid);
+    this->supervisor->run(notifyFd);
 }
 
 pid_t ProcessManager::startProcess(std::string cmd) {
@@ -139,11 +141,13 @@ void ProcessManager::process_starter(int sockPair[2]) {
             perror("fork");
             break;
         }
-        
+
         // TODO: return pid of created process
         if (targetPid == 0) {   
             execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
             exit(EXIT_SUCCESS);
+        } else {
+            
         }
         counter++;
     }

@@ -26,9 +26,9 @@
 #include <sys/mman.h>
 
 #include "../assistance/assistance.h"
-#include "../supervisor/supervisor.h"
+#include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
-#include "../supervised_p/supervised_p.h"
+#include "../ProcessManager/ProcessManager.h"
 
 /* Close a pair of sockets created by socketpair() */
 void closeSocketPair(int sockPair[2])

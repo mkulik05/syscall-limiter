@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(example_project)
 
 # Gather source and header files
-file(GLOB_RECURSE sources src/*.cpp src/*.h src/assistance/* src/seccomp/* src/supervised_p/* src/supervisor/*)
+file(GLOB_RECURSE sources src/*.cpp src/*.h src/assistance/* src/seccomp/* src/ProcessManager/* src/Supervisor/Manager/*  src/Supervisor/handlers/*)
 file(GLOB_RECURSE data resources/*)
 
 # Create the executable

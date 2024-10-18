@@ -27,37 +27,23 @@
 #include <sys/mman.h>
 
 #include "assistance/assistance.h"
-#include "supervisor/supervisor.h"
+#include "Supervisor/Manager/Supervisor.h"
 #include "seccomp/seccomp.h"
-#include "supervised_p/supervised_p.h"
+#include "ProcessManager/ProcessManager.h"
 
 std::vector<pid_t> pids;
 
 
 int main(int argc, char *argv[])
 {
-
-    // struct sigaction sa;
+;
 
     setbuf(stdout, NULL);
-
-
-
-    /* Catch SIGCHLD when the target terminates, so that the
-       supervisor can also terminate. */
-
-    // sa.sa_handler = sigchldHandler;
-    // sa.sa_flags = 0;
-    // sigemptyset(&sa.sa_mask);
-    // if (sigaction(SIGCHLD, &sa, NULL) == -1)
-    //     err(EXIT_FAILURE, "sigaction");
 
     ProcessManager* process_manager = new ProcessManager();
     process_manager->startProcess("dolphin");
     
-    for(;;) {
-        
-    }
+    for(;;) { }
 
     exit(EXIT_SUCCESS);
 }
