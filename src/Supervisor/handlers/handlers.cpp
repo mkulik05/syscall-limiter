@@ -29,6 +29,9 @@
 #include "../../seccomp/seccomp.h"
 #include "../../ProcessManager/ProcessManager.h"
 
+bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
+                  int argNum, char *path, size_t len);
+
 void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
 {
     printf("\tS: intercepted mkdir system call\n");

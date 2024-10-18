@@ -27,7 +27,6 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "../assistance/assistance.h"
 #include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
 #include "../ProcessManager/ProcessManager.h"

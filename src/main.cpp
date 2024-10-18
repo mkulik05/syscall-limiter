@@ -26,7 +26,6 @@
 #include <iostream>
 #include <sys/mman.h>
 
-#include "assistance/assistance.h"
 #include "Supervisor/Manager/Supervisor.h"
 #include "seccomp/seccomp.h"
 #include "ProcessManager/ProcessManager.h"
