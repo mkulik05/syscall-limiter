@@ -43,11 +43,10 @@ struct seccomp_notif *req;
 
     allocSeccompNotifBuffers(&req, &resp, &sizes);
 
-    std::cout << "Supervisor tarted" << std::endl;
+    std::cout << "Supervisor started" << std::endl;
     for (;;)
     {
         memset(req, 0, sizes.seccomp_notif);
-        std::cout << "Waiting for msgs on: " << notifyFd <<  std::endl;
         if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1)
         {
             if (errno == EINTR)
@@ -55,8 +54,8 @@ struct seccomp_notif *req;
             err(EXIT_FAILURE, "ioctl-SECCOMP_IOCTL_NOTIF_RECV");
         }
 
-        printf("\tS: got notification (ID %#llx) for PID %d\n",
-               req->id, req->pid);
+        // printf("\tS: got notification (ID %#llx) for PID %d\n",
+            //    req->id, req->pid);
 
         resp->id = req->id;
         // Code that starts processes is allowed to execute any syscall
@@ -84,19 +83,19 @@ struct seccomp_notif *req;
                 break;
             case SYS_getdents64:
                 handle_getdents(req, resp, notifyFd);
-                std::cout << std::endl << std::endl << std::endl<< std::endl<< std::endl<< std::endl << std::endl;
+                // std::cout << std::endl << std::endl << std::endl<< std::endl<< std::endl<< std::endl << std::endl;
                 // for (;;) {}
                 break;
             case SYS_getdents:
                 handle_getdents(req, resp, notifyFd);
-                std::cout << std::endl << std::endl << std::endl<< std::endl<< std::endl<< std::endl << std::endl;
+                // std::cout << std::endl << std::endl << std::endl<< std::endl<< std::endl<< std::endl << std::endl;
                 // for (;;) {}
                 break;
             default:
                 resp->error = 0;
                 resp->val = 0;
                 resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-                printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
+                // printf("\tS: allowing system call (ID %#llx) %d\n", req->id, req->data.nr);
                 break;
             }
         }

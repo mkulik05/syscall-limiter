@@ -137,7 +137,7 @@ void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
     if (nread != -1)
         path[nread] = '\0'; // Null-terminate the path
 
-    std::cout << path;
+    // std::cout << path;
     // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
     resp->val = 0;
 

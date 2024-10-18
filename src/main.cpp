@@ -42,6 +42,8 @@ int main(int argc, char *argv[])
 
     ProcessManager* process_manager = new ProcessManager();
     process_manager->startProcess("dolphin");
+    process_manager->startProcess("dolphin");
+    process_manager->startProcess("kate");
     
     for(;;) { }
 
