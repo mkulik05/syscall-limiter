@@ -30,6 +30,11 @@
 #include "../seccomp/seccomp.h"
 #include "../ProcessManager/ProcessManager.h"
 
+
+int seccomp(unsigned int operation, unsigned int flags, void *args)
+{
+    return syscall(SYS_seccomp, operation, flags, args);
+}
 /* Allocate buffers for the seccomp user-space notification request and
    response structures. It is the caller's responsibility to free the
    buffers returned via 'req' and 'resp'. */
@@ -140,7 +145,7 @@ int installNotifyFilter(void)
     };
 
     struct sock_fprog prog = {
-        .len = ARRAY_SIZE(filter),
+        .len = (sizeof(filter) / sizeof((filter)[0])),
         .filter = filter,
     };
 

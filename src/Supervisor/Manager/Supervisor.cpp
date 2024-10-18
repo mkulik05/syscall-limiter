@@ -25,7 +25,7 @@
 #include <iostream>
 #include <sys/mman.h>
 
-#include "../../assistance/assistance.h"
+
 #include "Supervisor.h"
 #include "../../seccomp/seccomp.h"
 #include "../../ProcessManager/ProcessManager.h"
@@ -37,7 +37,7 @@ Supervisor::Supervisor(pid_t starter_pid) {
     this->pid = getpid();  
 }
 void Supervisor::run(int notifyFd) {
-struct seccomp_notif *req;
+    struct seccomp_notif *req;
     struct seccomp_notif_resp *resp;
     struct seccomp_notif_sizes sizes;
 
