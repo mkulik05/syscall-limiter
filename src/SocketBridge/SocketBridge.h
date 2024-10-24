@@ -1,3 +1,5 @@
+#pragma once
+
 class SocketBridge {
     public:
         SocketBridge();

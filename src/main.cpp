@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -25,26 +24,50 @@
 #include <vector>
 #include <iostream>
 #include <sys/mman.h>
+#include <csignal>
 
 #include "Supervisor/Manager/Supervisor.h"
-#include "seccomp/seccomp.h"
 #include "ProcessManager/ProcessManager.h"
 
 std::vector<pid_t> pids;
 
+ProcessManager* process_manager = nullptr;
+
+
+void signalHandler(int sig_n) {
+    if (process_manager != nullptr) {
+        process_manager->broadcast_signal(sig_n);
+    }
+    if (sig_n == SIGINT) {
+        exit(1);
+    }
+}
+
+
+void setSygHandlers() {
+    std::signal(SIGKILL, signalHandler);
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGCONT, signalHandler);
+    std::signal(SIGSTOP, signalHandler);
+}
+
+
+
 
 int main(int argc, char *argv[])
 {
-;
 
+    setSygHandlers();
     setbuf(stdout, NULL);
 
-    ProcessManager* process_manager = new ProcessManager();
-    process_manager->startProcess("dolphin");
-    process_manager->startProcess("dolphin");
-    process_manager->startProcess("kate");
+    process_manager = new ProcessManager();
+    
+    pid_t pid = process_manager->startProcess("dolphin");
+    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp/"}, {SYS_getdents64, SYS_getdents});
+
     
     for(;;) { }
 
     exit(EXIT_SUCCESS);
 }
+

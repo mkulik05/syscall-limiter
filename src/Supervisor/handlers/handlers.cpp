@@ -28,11 +28,13 @@
 #include "../../Supervisor/Manager/Supervisor.h"
 #include "../../seccomp/seccomp.h"
 #include "../../ProcessManager/ProcessManager.h"
+#include "handlers.h"
+
 
 bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
                   int argNum, char *path, size_t len);
 
-void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
+void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
     printf("\tS: intercepted mkdir system call\n");
     bool pathOK;
@@ -80,7 +82,7 @@ void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
            resp->flags, resp->val, resp->error);
 }
 
-void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
+void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
     // printf("\tS: intercepted write system call\n");
     bool pathOK;
@@ -124,47 +126,43 @@ void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
 }
 
 
-void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
+void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
-    // printf("\tS: intercepted write system call\n");
     bool pathOK;
     char path[PATH_MAX];
 
-    int fd = req->data.args[0]; // Get file descriptor
+    int fd = req->data.args[0];
     char fdPath[PATH_MAX];
 
-    // Retrieve the pathname corresponding to the file descriptor
     snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
     ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
     if (nread != -1)
-        path[nread] = '\0'; // Null-terminate the path
-
-    // std::cout << path;
-    // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-    resp->val = 0;
+        path[nread] = '\0'; 
 
     if (nread == -1)
     {
-        resp->error = 0;
-        resp->val = 0;
-        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-        // printf("\tS: unable to resolve file descriptor path (%s)\n", strerror(errno));
+        return;
     }
-    else if (strncmp(path, "/tmp", strlen("/tmp")) == 0)
-    {
-        // Deny write access to files in /home/a/own_files/
-        // for (;;) {}
-        resp->error = -EACCES;
-        resp->flags = 0;
-        // printf("\tS: denying write to %s (EACCES)\n", path);
-    }
-    else
-    {
-        // Allow the write if it's not in /home/a/own_files/
-        resp->error = 0;
-        resp->val = 0;
-        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-        // printf("\tS: allowing write to %s\n", path);
+    
+    for (int i = 0; i < rules.size(); i++) {
+        Rule rule = rules[i];
+        switch (rule.type)
+        {
+        case DENY_ALWAYS:
+            resp->error = -EACCES;
+            resp->flags = 0;
+            return;
+            break;
+        
+        case DENY_PATH_ACCESS:
+            if (strncmp(path, rule.path.c_str(), strlen(rule.path.c_str())) == 0) {
+                resp->error = -EACCES;
+                resp->flags = 0;
+                return;
+            }
+            break;
+        }
+        
     }
 }
 
@@ -232,4 +230,10 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
         return true;
 
     return false;
+}
+
+void add_handlers(std::map<int, MapHandler>& map) {
+    map[SYS_mkdir] = handle_mkdir;
+    map[SYS_getdents] = handle_getdents;
+    map[SYS_write] = handle_write;
 }

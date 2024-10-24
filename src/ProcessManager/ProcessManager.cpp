@@ -37,9 +37,6 @@ ProcessManager::ProcessManager()
     this->startedPIDs = std::vector<pid_t>();
     this->fd_bridge = new SocketBridge();
     this->started_pids_bridge = new SocketBridge();
-    std::cout << this->started_pids_bridge->send_int(1);
-    perror("fndjksfnjkdsnfjkds");
-    std::cout << "Res: "<< this->started_pids_bridge->recv_int() << "lll";
 
     pid_t targetPid = fork();
 
@@ -49,7 +46,9 @@ ProcessManager::ProcessManager()
     if (targetPid > 0) {
         this->supervisor = new Supervisor(targetPid);
         std::cout << "Process starter pid: " << targetPid << std::endl;
-        this->start_supervisor(targetPid);
+        this->thread_supervisor = std::thread([this, targetPid]() {
+            this->start_supervisor(targetPid);
+        });
         this->process_starter_pid = targetPid;
         return;
     }    
@@ -58,32 +57,16 @@ ProcessManager::ProcessManager()
     exit(EXIT_SUCCESS);
 }
 
-void ProcessManager::start_supervisor(pid_t starter_pid) {
-    std::cout << 44 << " ";
-    pid_t targetPid = fork();
-
-    if (targetPid == -1)
-        err(EXIT_FAILURE, "fork");
-
-    if (targetPid > 0) {
-        return;
+void ProcessManager::broadcast_signal(int sygn_n) {
+    kill(this->process_starter_pid, sygn_n);
+    for (int i = 0; i < this->startedPIDs.size(); i++) {
+        kill(this->startedPIDs[i], sygn_n);
     }
-
-    std::cout << 45 << " ";
-    int notifyFd = this->fd_bridge->recv_fd();
-    std::cout << 46 << " " << notifyFd << std::endl;
-    if (notifyFd == -1)
-        err(EXIT_FAILURE, "recvfd");
-    std::cout << 47;
-    this->fd_bridge;
-
-    delete this->fd_bridge;
-
-    this->supervisor->run(notifyFd);
+    kill(this->supervisor->pid, sygn_n);
 }
 
 pid_t ProcessManager::startProcess(std::string cmd) {
-    key_t key = ftok("tmp222", START_PROCESS_IPC_VALUE);
+    key_t key = ftok("tmp2222", START_PROCESS_IPC_VALUE);
     int msgid = msgget(key, 0666 | IPC_CREAT);
 
     if (msgid == -1) {
@@ -99,9 +82,36 @@ pid_t ProcessManager::startProcess(std::string cmd) {
         perror("msgsnd");
         return 1;
     }
+    std::cout << "dsds ---- -- ";
     int process_pid = this->started_pids_bridge->recv_int();
+    std::cout << "Target PID: " << process_pid;
     this->startedPIDs.push_back(process_pid);
     return 0;
+}
+
+
+void ProcessManager::start_supervisor(pid_t starter_pid) {
+    std::cout << 44 << " ";
+    // pid_t targetPid = fork();
+
+    // if (targetPid == -1)
+    //     err(EXIT_FAILURE, "fork");
+
+    // if (targetPid > 0) {
+    //     return;
+    // }
+
+    // std::cout << 45 << " ";
+    int notifyFd = this->fd_bridge->recv_fd();
+    // std::cout << 46 << " " << notifyFd << std::endl;
+    if (notifyFd == -1)
+        err(EXIT_FAILURE, "recvfd");
+    std::cout << 47;
+    this->fd_bridge;
+
+    delete this->fd_bridge;
+
+    this->supervisor->run(notifyFd);
 }
 
 void ProcessManager::process_starter() {
@@ -109,7 +119,7 @@ void ProcessManager::process_starter() {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
         err(EXIT_FAILURE, "prctl");
         
-    key_t key = ftok("tmp222", START_PROCESS_IPC_VALUE);
+    key_t key = ftok("tmp2222", START_PROCESS_IPC_VALUE);
     int msgid = msgget(key, 0666 | IPC_CREAT);
     std::cout << std::endl<< msgid;
     if (msgid == -1) {
@@ -118,10 +128,13 @@ void ProcessManager::process_starter() {
         return;
     }
 
+    std::cout << "-/-/-/-/-/-/-/-";
     int notifyFd = installNotifyFilter();
 
     if (this->fd_bridge->send_fd(notifyFd) == -1)
         err(EXIT_FAILURE, "sendfd");
+
+    std::cout << "//////           /////";
 
     if (close(notifyFd) == -1)
         err(EXIT_FAILURE, "close-target-notify-fd");
@@ -130,7 +143,9 @@ void ProcessManager::process_starter() {
 
     long counter = 1;
     for (;;) {
+        std::cout << "//////           /////";
         size_t n = msgrcv(msgid, &message, sizeof(message.msg_text), counter, 0);
+        std::cout << "////////////////////";
         if (n == -1) {
             perror("msgrcv");
             return;

@@ -34,9 +34,6 @@ int seccomp(unsigned int operation, unsigned int flags, void *args)
 {
     return syscall(SYS_seccomp, operation, flags, args);
 }
-/* Allocate buffers for the seccomp user-space notification request and
-   response structures. It is the caller's responsibility to free the
-   buffers returned via 'req' and 'resp'. */
 
 void allocSeccompNotifBuffers(struct seccomp_notif **req,
                          struct seccomp_notif_resp **resp,
@@ -108,12 +105,6 @@ bool cookieIsValid(int notifyFd, uint64_t id)
         BPF_JUMP(BPF_JMP | BPF_JGE | BPF_K, X32_SYSCALL_BIT, 0, 1),   \
         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS)
 
-/* installNotifyFilter() installs a seccomp filter that generates
-   user-space notifications (SECCOMP_RET_USER_NOTIF) when the process
-   calls mkdir(2); the filter allows all other system calls.
-
-   The function return value is a file descriptor from which the
-   user-space notifications can be fetched. */
 
 int installNotifyFilter(void)
 {
@@ -147,9 +138,7 @@ int installNotifyFilter(void)
         .len = (sizeof(filter) / sizeof((filter)[0])),
         .filter = filter,
     };
-
-    /* Install the filter with the SECCOMP_FILTER_FLAG_NEW_LISTENER flag;
-       as a result, seccomp() returns a notification file descriptor. */
+    
     notifyFd = seccomp(SECCOMP_SET_MODE_FILTER,
                        SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
     

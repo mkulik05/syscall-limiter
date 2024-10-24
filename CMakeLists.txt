@@ -1,32 +1,37 @@
 cmake_minimum_required(VERSION 3.16)
-project(example_project)
 
-# Gather source and header files
-file(GLOB_RECURSE sources src/* src/seccomp/* src/ProcessManager/* src/Supervisor/Manager/*  src/Supervisor/handlers/* src/SocketBridge/*)
-file(GLOB_RECURSE data resources/*)
+project(PiVOX VERSION 1.0.0 LANGUAGES CXX)
 
-# Create the executable
-add_executable(example ${sources} ${data})
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstandalone-debug")
 
-# Set compiler options
-target_compile_options(example PUBLIC -std=c++1y -Wall -Wfloat-conversion)
 
-# Include directories for the target
-target_include_directories(example PUBLIC src/main)
+set(SRC_FILES
+    src/main.cpp
+    src/seccomp/seccomp.cpp
+    src/ProcessManager/ProcessManager.cpp
+    src/SocketBridge/SocketBridge.cpp
+    src/Supervisor/handlers/handlers.cpp
+    src/Supervisor/Manager/Supervisor.cpp
+)
 
-# Copy resource files to the build directory
-file(COPY ${data} DESTINATION resources)
+set(HEADER_FILES
+    src/seccomp/seccomp.h
+    src/ProcessManager/ProcessManager.h
+    src/SocketBridge/SocketBridge.h
+    src/Supervisor/Manager/Supervisor.h
+    src/Supervisor/handlers/handlers.h
+    src/rules/rules.h
+)
 
-# Find and link Boost libraries
-find_package(Boost 1.36.0 COMPONENTS filesystem system REQUIRED)
-target_link_libraries(example PUBLIC ${Boost_LIBRARIES})
 
-# Install targets and resources
-install(TARGETS example DESTINATION example_destination)
-install(DIRECTORY resources DESTINATION example_destination)
+add_executable(result
+    ${SRC_FILES}
+    ${HEADER_FILES}
+)
 
-# Package settings
-set(CPACK_PACKAGE_NAME "MyExample")
-set(CPACK_PACKAGE_VERSION "1.0.0")
-set(CPACK_MONOLITHIC_INSTALL 1)
-include(CPack)
+set_target_properties(result PROPERTIES
+    WIN32_EXECUTABLE ON
+    MACOSX_BUNDLE ON
+)

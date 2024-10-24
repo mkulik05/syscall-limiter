@@ -1,6 +1,9 @@
+#pragma once
+
 #include <fcntl.h>
 #include <string>
 #include <vector>
+#include <thread>
 #include "../SocketBridge/SocketBridge.h"
 
 #define MSG_SIZE 512
@@ -16,7 +19,9 @@ struct msg_buffer {
 class ProcessManager {
     public:
         ProcessManager();
+        void broadcast_signal(int sig_n);
         pid_t startProcess(std::string cmd);
+        Supervisor* supervisor;
         
     private:
         // TODO: add started process pid returning
@@ -24,8 +29,6 @@ class ProcessManager {
         void start_supervisor(pid_t starter_pid);
 
         pid_t process_starter_pid;
-
-        Supervisor* supervisor;
         
         SocketBridge* fd_bridge;
         SocketBridge* started_pids_bridge;
@@ -34,4 +37,6 @@ class ProcessManager {
         long start_process_msg_type; 
 
         std::vector<pid_t> startedPIDs;
+
+        std::thread thread_supervisor;
 };

@@ -1,5 +1,9 @@
+#pragma once
+
 #include <linux/seccomp.h>
 
-void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd);
-void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd);
-void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd);
+#include "../../rules/rules.h"
+
+typedef void (*MapHandler)(seccomp_notif*, seccomp_notif_resp*, int, std::vector<Rule>&);
+
+void add_handlers(std::map<int, MapHandler>& map);
