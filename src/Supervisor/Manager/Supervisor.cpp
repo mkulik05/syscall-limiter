@@ -84,20 +84,53 @@ void Supervisor::run(int notifyFd)
     exit(EXIT_SUCCESS);
 }
 
+void printRuleType(RuleType type) {
+    switch (type) {
+        case DENY_PATH_ACCESS: std::cout << "DENY_PATH_ACCESS"; break;
+        case DENY_ALWAYS:      std::cout << "DENY_ALWAYS"; break;
+        case ALLOW_WITH_LOG:   std::cout << "ALLOW_WITH_LOG"; break;
+    }
+}
+void printMap(const std::map<int, std::vector<Rule>>& myMap) {
+    for (const auto& pair : myMap) {
+        std::cout << "Key: " << pair.first << std::endl;
+        for (const auto& rule : pair.second) {
+            std::cout << "  Rule ID: " << rule.rule_id 
+                      << ", Type: ";
+            printRuleType(rule.type);
+            std::cout << ", Path: " << rule.path << std::endl;
+        }
+    }
+}
+
+void printMap2(const std::map<int, MapHandler>& myMap) {
+    for (const auto& pair : myMap) {
+        std::cout << "K: " << pair.first << std::endl;
+    }
+}
+
+
 void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd) {
     resp->error = 0;
     resp->val = 0;
     resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+    if (req->pid == this->starter_pid) return;
     int gpid = getpgid(req->pid);
+    int firstKey = 0;
     if (!this->map_all_rules.empty()) {
         auto it = this->map_all_rules.begin();
-        int firstKey = it->first;
-        std::cout << "\n" << firstKey << "-" << gpid << "\n";
+        firstKey = it->first;
+        auto it2 = this->map_handlers.begin();
+        printMap(this->map_all_rules[firstKey]);
+        printMap2(this->map_handlers);
+        std::cout << "\n" << firstKey << "-" << gpid << "-" << req->pid << " - " <<  it2->first <<"\n";
     }
     
-    if (this->map_all_rules.count(gpid) == 0) return;
+    if (this->map_all_rules.count(firstKey) == 0) return;
     if (this->map_handlers.count(req->data.nr) != 0) {
-        this->map_handlers[req->data.nr](req, resp, notifyFd, this->map_all_rules[gpid][req->data.nr]);
+        this->map_handlers[req->data.nr](req, resp, notifyFd, this->map_all_rules[firstKey][req->data.nr]);
+    } else {
+        std::cout << "\n\n-------------------------------\n";
     }
 }
 
@@ -107,7 +140,7 @@ int Supervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls)
     std::cout << "lalalallalalalalala";
     sem_wait(this->semaphore);
     std::cout << "+++++++++++++++++++";
-    int id = 5;//this->rnd_dis(this->rnd_gen);
+    int id = std::rand();
     std::cout << "################" << pid << "###";
     rule.rule_id = id;
     std::cout << "------------------";
@@ -147,8 +180,9 @@ void Supervisor::deleteRule(pid_t pid, int rule_id)
 }
 
 int Supervisor::updateRule(pid_t pid, int rule_id, Rule rule) {
+    std::vector<int> vec_syscalls = this->map_rules_ids[rule_id].vec_syscalls;
     this->deleteRule(pid, rule_id);
-    int id = this->addRule(pid, rule, this->map_rules_ids[rule_id].vec_syscalls);
+    int id = this->addRule(pid, rule, vec_syscalls);
     this->map_rules_ids.erase(rule_id);
     return id;
 }

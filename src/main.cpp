@@ -63,8 +63,10 @@ int main(int argc, char *argv[])
     process_manager = new ProcessManager();
     
     pid_t pid = process_manager->startProcess("dolphin");
-    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp/"}, {SYS_getdents64, SYS_getdents});
-    
+    int r_id = process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp/"}, {SYS_getdents64, SYS_getdents});
+    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp"}, {SYS_getdents64, SYS_getdents});
+    process_manager->supervisor->updateRule(pid, r_id, {0, DENY_PATH_ACCESS, "/tmppp"});
+    // process_manager->supervisor->deleteRule(pid, r_id);
     for(;;) { }
 
     exit(EXIT_SUCCESS);

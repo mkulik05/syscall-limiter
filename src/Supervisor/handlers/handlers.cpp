@@ -233,7 +233,8 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
 }
 
 void add_handlers(std::map<int, MapHandler>& map) {
-    map[SYS_mkdir] = handle_mkdir;
+    // map[SYS_mkdir] = handle_mkdir;
     map[SYS_getdents] = handle_getdents;
-    map[SYS_write] = handle_write;
+    map[SYS_getdents64] = handle_getdents;
+    // map[SYS_write] = handle_write;
 }
