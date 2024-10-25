@@ -32,7 +32,7 @@
 #include "../ProcessManager/ProcessManager.h"
 
 ProcessManager::ProcessManager()
-{
+{   
     this->start_process_msg_type = 1;
     this->startedPIDs = std::vector<pid_t>();
     this->fd_bridge = new SocketBridge();
@@ -46,7 +46,9 @@ ProcessManager::ProcessManager()
     if (targetPid > 0) {
         this->supervisor = new Supervisor(targetPid);
         std::cout << "Process starter pid: " << targetPid << std::endl;
+        std::cout << "-=-=-=-=-=-=-=-=-=++++++" << getpid() << "+++++-=-=-=-=-=-=-=-=-=";
         this->thread_supervisor = std::thread([this, targetPid]() {
+            std::cout << "-=-=-=-=-=-=-=-=-=" << getpid() << "-=-=-=-=-=-=-=-=-=";
             this->start_supervisor(targetPid);
         });
         this->process_starter_pid = targetPid;
@@ -86,7 +88,7 @@ pid_t ProcessManager::startProcess(std::string cmd) {
     int process_pid = this->started_pids_bridge->recv_int();
     std::cout << "Target PID: " << process_pid;
     this->startedPIDs.push_back(process_pid);
-    return 0;
+    return process_pid;
 }
 
 
@@ -134,7 +136,9 @@ void ProcessManager::process_starter() {
     if (this->fd_bridge->send_fd(notifyFd) == -1)
         err(EXIT_FAILURE, "sendfd");
 
-    std::cout << "//////           /////";
+    std::cout << "///+///           ///+//" << getpid() << "\n\n\n";
+
+    
 
     if (close(notifyFd) == -1)
         err(EXIT_FAILURE, "close-target-notify-fd");
@@ -156,12 +160,12 @@ void ProcessManager::process_starter() {
         pid_t targetPid = fork();
         if (targetPid == -1) {
             perror("fork");
-            break;
         }
 
         if (targetPid != 0) {   
-            if (this->started_pids_bridge->send_int(targetPid) == -1)
+            if (this->started_pids_bridge->send_int(getpgid(targetPid)) == -1)
                 perror("Failed to send started process descriptor");
+            std::cout << "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL";
         } else {
             execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
             exit(EXIT_SUCCESS);

@@ -85,14 +85,19 @@ void Supervisor::run(int notifyFd)
 }
 
 void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd) {
-    std::cout << "01010101010101010";
     resp->error = 0;
     resp->val = 0;
     resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-    std::cout << "\n" <<  this->map_all_rules.count(req->pid) << "\n";
-    if (this->map_all_rules.count(req->pid) == 0) return;
+    int gpid = getpgid(req->pid);
+    if (!this->map_all_rules.empty()) {
+        auto it = this->map_all_rules.begin();
+        int firstKey = it->first;
+        std::cout << "\n" << firstKey << "-" << gpid << "\n";
+    }
+    
+    if (this->map_all_rules.count(gpid) == 0) return;
     if (this->map_handlers.count(req->data.nr) != 0) {
-        this->map_handlers[req->data.nr](req, resp, notifyFd, this->map_all_rules[req->pid][req->data.nr]);
+        this->map_handlers[req->data.nr](req, resp, notifyFd, this->map_all_rules[gpid][req->data.nr]);
     }
 }
 
@@ -103,7 +108,7 @@ int Supervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls)
     sem_wait(this->semaphore);
     std::cout << "+++++++++++++++++++";
     int id = 5;//this->rnd_dis(this->rnd_gen);
-    std::cout << "################";
+    std::cout << "################" << pid << "###";
     rule.rule_id = id;
     std::cout << "------------------";
     this->map_rules_ids[id] = RuleInfo{pid, syscalls};
@@ -114,7 +119,6 @@ int Supervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls)
     }
 
     std::cout << "\n" <<  this->map_all_rules.count(pid) << "\n";
-    for (;;){}
     sem_post(this->semaphore);
     return id;
 }
