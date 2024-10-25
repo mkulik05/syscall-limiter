@@ -60,10 +60,8 @@ void Supervisor::run(int notifyFd)
         }
 
         resp->id = req->id;
-        
-        std::cout << "Sem wait start\n";
+
         sem_wait(this->semaphore);
-        std::cout << "Sem wait passed\n";
         this->handle_syscall(req, resp, notifyFd);
         sem_post(this->semaphore);
         
@@ -116,34 +114,29 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
     resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
     if (req->pid == this->starter_pid) return;
     int gpid = getpgid(req->pid);
-    int firstKey = 0;
-    if (!this->map_all_rules.empty()) {
-        auto it = this->map_all_rules.begin();
-        firstKey = it->first;
-        auto it2 = this->map_handlers.begin();
-        printMap(this->map_all_rules[firstKey]);
-        printMap2(this->map_handlers);
-        std::cout << "\n" << firstKey << "-" << gpid << "-" << req->pid << " - " <<  it2->first <<"\n";
-    }
+    // int firstKey = 0;
+    // if (!this->map_all_rules.empty()) {
+    //     auto it = this->map_all_rules.begin();
+    //     firstKey = it->first;
+    //     auto it2 = this->map_handlers.begin();
+    //     // printMap(this->map_all_rules[firstKey]);
+    //     // printMap2(this->map_handlers);
+    //     std::cout << "\n" << firstKey << "-" << gpid << "-" << req->pid << " - " <<  it2->first <<"\n";
+    // }
     
-    if (this->map_all_rules.count(firstKey) == 0) return;
+    if (this->map_all_rules.count(gpid) == 0) return;
+    if (this->map_all_rules[gpid].count(req->data.nr) == 0) return;
     if (this->map_handlers.count(req->data.nr) != 0) {
-        this->map_handlers[req->data.nr](req, resp, notifyFd, this->map_all_rules[firstKey][req->data.nr]);
-    } else {
-        std::cout << "\n\n-------------------------------\n";
+        this->map_handlers[req->data.nr](req, resp, notifyFd, this->map_all_rules[gpid][req->data.nr]);
     }
 }
 
 int Supervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls)
 {
-
-    std::cout << "lalalallalalalalala";
     sem_wait(this->semaphore);
-    std::cout << "+++++++++++++++++++";
+
     int id = std::rand();
-    std::cout << "################" << pid << "###";
     rule.rule_id = id;
-    std::cout << "------------------";
     this->map_rules_ids[id] = RuleInfo{pid, syscalls};
     
     for (int i = 0; i < syscalls.size(); i++)
@@ -151,7 +144,6 @@ int Supervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls)
         this->map_all_rules[pid][syscalls[i]].push_back(rule);
     }
 
-    std::cout << "\n" <<  this->map_all_rules.count(pid) << "\n";
     sem_post(this->semaphore);
     return id;
 }

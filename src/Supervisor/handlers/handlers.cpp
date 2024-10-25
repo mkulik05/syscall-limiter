@@ -34,6 +34,28 @@
 bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
                   int argNum, char *path, size_t len);
 
+void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rule>& rules) {
+    for (int i = 0; i < rules.size(); i++) {
+        Rule rule = rules[i];
+        switch (rule.type)
+        {
+        case DENY_ALWAYS:
+            resp->error = -EACCES;
+            resp->flags = 0;
+            return;
+            break;
+        
+        case DENY_PATH_ACCESS:
+            if (strncmp(path.c_str(), rule.path.c_str(), strlen(rule.path.c_str())) == 0) {
+                resp->error = -EACCES;
+                resp->flags = 0;
+                return;
+            }
+            break;
+        }   
+    }
+}
+
 void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
     printf("\tS: intercepted mkdir system call\n");
@@ -46,87 +68,15 @@ void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, st
     if (!pathOK)
     {
         resp->error = -EINVAL;
-        printf("\tS: spoofing error for invalid pathname (%s)\n",
-               strerror(-resp->error));
-    }
-    else if (strncmp(path, "/tmp/", strlen("/tmp/")) == 0)
-    {
-        printf("\tS: executing: mkdir(\"%s\", %#llo)\n",
-               path, req->data.args[1]);
-
-        if (mkdir(path, req->data.args[1]) == 0)
-        {
-            resp->error = 0;
-            resp->val = strlen(path);
-            printf("\tS: success! spoofed return = %lld\n", resp->val);
-        }
-        else
-        {
-            resp->error = -errno;
-            printf("\tS: failure! (errno = %d; %s)\n", errno, strerror(errno));
-        }
-    }
-    else if (strncmp(path, "./", strlen("./")) == 0)
-    {
-        resp->error = resp->val = 0;
-        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-        printf("\tS: target can execute system call\n");
-    }
-    else
-    {
-        resp->error = -EOPNOTSUPP;
-        printf("\tS: spoofing error response (%s)\n", strerror(-resp->error));
-    }
-
-    printf("\tS: sending response (flags = %#x; val = %lld; error = %d)\n",
-           resp->flags, resp->val, resp->error);
-}
-
-void handle_write(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
-{
-    // printf("\tS: intercepted write system call\n");
-    bool pathOK;
-    char path[PATH_MAX];
-
-    int fd = req->data.args[0]; // Get file descriptor
-    char fdPath[PATH_MAX];
-
-    // Retrieve the pathname corresponding to the file descriptor
-    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
-    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
-    if (nread != -1)
-        path[nread] = '\0'; // Null-terminate the path
-
-    
-    // resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-    resp->val = 0;
-
-    if (nread == -1)
-    {
-        resp->error = 0;
-        resp->val = 0;
-        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-        // printf("\tS: unable to resolve file descriptor path (%s)\n", strerror(errno));
-    }
-    else if (strncmp(path, "/tmp/", strlen("/tmp/")) == 0)
-    {
-        // Deny write access to files in /home/a/own_files/
-        resp->error = -EACCES;
         resp->flags = 0;
-        // printf("\tS: denying write to %s (EACCES)\n", path);
+        return;
     }
-    else
-    {
-        // Allow the write if it's not in /home/a/own_files/
-        resp->error = 0;
-        resp->val = 0;
-        resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
-        // printf("\tS: allowing write to %s\n", path);
-    }
+    checkPathesRule(path, resp, rules);
 }
 
 
-void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
+
+void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
     bool pathOK;
     char path[PATH_MAX];
@@ -143,32 +93,10 @@ void handle_getdents(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd,
     {
         return;
     }
-    
-    for (int i = 0; i < rules.size(); i++) {
-        Rule rule = rules[i];
-        switch (rule.type)
-        {
-        case DENY_ALWAYS:
-            resp->error = -EACCES;
-            resp->flags = 0;
-            return;
-            break;
-        
-        case DENY_PATH_ACCESS:
-            if (strncmp(path, rule.path.c_str(), strlen(rule.path.c_str())) == 0) {
-                resp->error = -EACCES;
-                resp->flags = 0;
-                return;
-            }
-            break;
-        }
-        
-    }
+    checkPathesRule(path, resp, rules);
 }
 
-
-bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
-                  int argNum, char *path, size_t len)
+bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char *path, size_t len)
 {
     int procMemFd;
     char procMemPath[PATH_MAX];
@@ -233,8 +161,15 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
 }
 
 void add_handlers(std::map<int, MapHandler>& map) {
-    // map[SYS_mkdir] = handle_mkdir;
-    map[SYS_getdents] = handle_getdents;
-    map[SYS_getdents64] = handle_getdents;
-    // map[SYS_write] = handle_write;
+    map[SYS_mkdir] = handle_mkdir;
+    map[SYS_read] = handle_path_restriction;
+    map[SYS_write] = handle_path_restriction;
+    map[SYS_close] = handle_path_restriction;
+    map[SYS_lseek] = handle_path_restriction;
+    map[SYS_fstat] = handle_path_restriction;
+    map[SYS_fsync] = handle_path_restriction;
+    map[SYS_flock] = handle_path_restriction;
+    map[SYS_getdents] = handle_path_restriction;
+    map[SYS_getdents64] = handle_path_restriction;
+    map[SYS_sendfile] = handle_path_restriction;
 }
