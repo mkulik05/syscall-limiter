@@ -56,14 +56,10 @@ void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rul
     }
 }
 
-void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
+void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
-    printf("\tS: intercepted mkdir system call\n");
-    bool pathOK;
     char path[PATH_MAX];
-    pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
-    resp->flags = 0;
-    resp->val = 0;
+    bool pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
 
     if (!pathOK)
     {
@@ -76,7 +72,7 @@ void handle_mkdir(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, st
 
 
 
-void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
+void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
 {
     bool pathOK;
     char path[PATH_MAX];
@@ -93,6 +89,49 @@ void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int n
     {
         return;
     }
+    checkPathesRule(path, resp, rules);
+}
+
+void handle_openat_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    char path[PATH_MAX];
+    int dirfd = req->data.args[0]; // dirfd
+
+    char pathname[PATH_MAX];
+    bool pathOK = getTargetPathname(req, notifyFd, 1, pathname, sizeof(pathname));
+
+    if (!pathOK)
+    {
+        resp->error = -EINVAL;
+        resp->flags = 0;
+        return;
+    }
+    std::cout << pathname <<  " - path" << dirfd << std::endl;
+
+    if (dirfd == AT_FDCWD) {
+        if (realpath(pathname, path) == nullptr) {
+            resp->error = -ENOENT;
+            resp->flags = 0;
+            return;
+        }
+        std::cout << path << std::endl;
+    } else {
+        char resolvedPath[PATH_MAX];
+        snprintf(resolvedPath, sizeof(resolvedPath), "/proc/%d/fd/%d", req->pid, dirfd);
+        char dirPath[PATH_MAX];
+        ssize_t nread = readlink(resolvedPath, dirPath, sizeof(dirPath) - 1);
+        if (nread == -1) {
+            resp->error = -EBADF;
+            resp->flags = 0;
+            return;
+        }
+        dirPath[nread] = '\0'; 
+        if (realpath((std::string(dirPath) + "/" + std::string(pathname)).c_str(), path) == nullptr) {
+            resp->error = -ENOENT;
+            resp->flags = 0;
+            return;
+        }
+    }
+
     checkPathesRule(path, resp, rules);
 }
 
@@ -161,15 +200,17 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char
 }
 
 void add_handlers(std::map<int, MapHandler>& map) {
-    map[SYS_mkdir] = handle_mkdir;
-    map[SYS_read] = handle_path_restriction;
-    map[SYS_write] = handle_path_restriction;
-    map[SYS_close] = handle_path_restriction;
-    map[SYS_lseek] = handle_path_restriction;
-    map[SYS_fstat] = handle_path_restriction;
-    map[SYS_fsync] = handle_path_restriction;
-    map[SYS_flock] = handle_path_restriction;
-    map[SYS_getdents] = handle_path_restriction;
-    map[SYS_getdents64] = handle_path_restriction;
-    map[SYS_sendfile] = handle_path_restriction;
+    map[SYS_openat] = handle_openat_restriction;
+    // map[SYS_mkdir] = handle_path_restriction;
+    map[SYS_open] = handle_path_restriction;
+    // map[SYS_read] = handle_fd_restriction;
+    // map[SYS_write] = handle_fd_restriction;
+    // map[SYS_close] = handle_fd_restriction;
+    // map[SYS_lseek] = handle_fd_restriction;
+    // map[SYS_fstat] = handle_fd_restriction;
+    // map[SYS_fsync] = handle_fd_restriction;
+    // map[SYS_flock] = handle_fd_restriction;
+    // map[SYS_getdents] = handle_fd_restriction;
+    // map[SYS_getdents64] = handle_fd_restriction;
+    // map[SYS_sendfile] = handle_fd_restriction;
 }

@@ -114,24 +114,26 @@ int installNotifyFilter(void)
 
         X86_64_CHECK_ARCH_AND_LOAD_SYSCALL_NR,
 
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mkdir, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mkdir, 0, 1),
+        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_write, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_write, 0, 1),
+        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_open, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_open, 0, 1),
+        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_openat, 0, 1),
+        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
 
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_getdents64, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_getdents, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_getdents64, 0, 1),
+        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        // BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_getdents, 0, 1),
+        // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
         
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_clock_gettime, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_sendmsg, 0, 1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
-        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_USER_NOTIF),
     };
 
     struct sock_fprog prog = {

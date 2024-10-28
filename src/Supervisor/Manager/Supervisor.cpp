@@ -58,7 +58,6 @@ void Supervisor::run(int notifyFd)
                 continue;
             err(EXIT_FAILURE, "ioctl-SECCOMP_IOCTL_NOTIF_RECV");
         }
-
         resp->id = req->id;
 
         sem_wait(this->semaphore);
@@ -114,16 +113,18 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
     resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
     if (req->pid == this->starter_pid) return;
     int gpid = getpgid(req->pid);
-    // int firstKey = 0;
+    int firstKey = 0;
     // if (!this->map_all_rules.empty()) {
     //     auto it = this->map_all_rules.begin();
     //     firstKey = it->first;
     //     auto it2 = this->map_handlers.begin();
-    //     // printMap(this->map_all_rules[firstKey]);
-    //     // printMap2(this->map_handlers);
-    //     std::cout << "\n" << firstKey << "-" << gpid << "-" << req->pid << " - " <<  it2->first <<"\n";
+    //     printMap(this->map_all_rules[firstKey]);
+    //     printMap2(this->map_handlers);
+    //     std::cout << "\n" << firstKey << "-" << gpid << "-" << req->pid << " - " <<  it2->first << " - - - " << req->data.nr <<"\n";
     // }
     
+    // std::cout << req->data.nr;
+
     if (this->map_all_rules.count(gpid) == 0) return;
     if (this->map_all_rules[gpid].count(req->data.nr) == 0) return;
     if (this->map_handlers.count(req->data.nr) != 0) {
