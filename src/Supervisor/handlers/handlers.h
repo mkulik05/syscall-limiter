@@ -6,4 +6,4 @@
 
 typedef void (*MapHandler)(seccomp_notif*, seccomp_notif_resp*, int, std::vector<Rule>&);
 
-void add_handlers(std::map<int, MapHandler>& map);
+void add_handlers(std::unordered_map<int, MapHandler>& map);
