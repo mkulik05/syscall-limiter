@@ -20,7 +20,10 @@ class ProcessManager {
     public:
         ProcessManager();
         void broadcast_signal(int sig_n);
-        pid_t startProcess(std::string cmd);
+        pid_t addProcess(std::string cmd);
+        void startProcess(pid_t pid);
+
+        // pid_t startProcess(std::string cmd, Rule ...ules);
         Supervisor* supervisor;
         
     private:

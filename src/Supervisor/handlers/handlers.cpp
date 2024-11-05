@@ -22,14 +22,12 @@
 #include <unistd.h>
 #include <map>
 #include <vector>
-#include <iostream>
 #include <sys/mman.h>
-
 #include "../../Supervisor/Manager/Supervisor.h"
 #include "../../seccomp/seccomp.h"
 #include "../../ProcessManager/ProcessManager.h"
 #include "handlers.h"
-
+#include "../../Logger/Logger.h"
 
 bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
                   int argNum, char *path, size_t len);
@@ -37,14 +35,12 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
 void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rule>& rules) {
     for (int i = 0; i < rules.size(); i++) {
         Rule rule = rules[i];
-        switch (rule.type)
-        {
+        switch (rule.type) {
         case DENY_ALWAYS:
             resp->error = -EACCES;
             resp->flags = 0;
             return;
-            break;
-        
+
         case DENY_PATH_ACCESS:
             if (strncmp(path.c_str(), rule.path.c_str(), strlen(rule.path.c_str())) == 0) {
                 resp->error = -EACCES;
@@ -56,13 +52,11 @@ void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rul
     }
 }
 
-void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
-{
+void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
     char path[PATH_MAX];
     bool pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
 
-    if (!pathOK)
-    {
+    if (!pathOK) {
         resp->error = -EINVAL;
         resp->flags = 0;
         return;
@@ -70,10 +64,7 @@ void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int n
     checkPathesRule(path, resp, rules);
 }
 
-
-
-void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules)
-{
+void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
     bool pathOK;
     char path[PATH_MAX];
 
@@ -85,8 +76,8 @@ void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int not
     if (nread != -1)
         path[nread] = '\0'; 
 
-    if (nread == -1)
-    {
+    if (nread == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to read link for FD: %d", fd);
         return;
     }
     checkPathesRule(path, resp, rules);
@@ -95,37 +86,41 @@ void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int not
 void handle_openat_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
     char path[PATH_MAX];
     int dirfd = req->data.args[0]; // dirfd
+    char path_arg2[PATH_MAX];
+    bool pathOK = getTargetPathname(req, notifyFd, 1, path_arg2, sizeof(path_arg2));
 
-    char pathname[PATH_MAX];
-    bool pathOK = getTargetPathname(req, notifyFd, 1, pathname, sizeof(pathname));
-
-    if (!pathOK)
-    {
+    if (!pathOK) {
         resp->error = -EINVAL;
         resp->flags = 0;
         return;
     }
-    std::cout << pathname <<  " - path" << dirfd << std::endl;
 
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "Openat syscall: ");
     if (dirfd == AT_FDCWD) {
-        if (realpath(pathname, path) == nullptr) {
-            resp->error = -ENOENT;
-            resp->flags = 0;
-            return;
+        if (realpath(path_arg2, path) == nullptr) {
+            int fd = open(path_arg2, O_CREAT);
+            if (realpath(path_arg2, path) == nullptr) {
+                resp->error = -ENOENT;
+                resp->flags = 0;
+                close(fd);
+                unlink(path_arg2);
+                return;
+            }
+            close(fd);
+            unlink(path_arg2);
         }
-        std::cout << path << std::endl;
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Path_arg2: %s, Res path: %s", path_arg2, path);            
     } else {
         char resolvedPath[PATH_MAX];
         snprintf(resolvedPath, sizeof(resolvedPath), "/proc/%d/fd/%d", req->pid, dirfd);
-        char dirPath[PATH_MAX];
-        ssize_t nread = readlink(resolvedPath, dirPath, sizeof(dirPath) - 1);
+        ssize_t nread = readlink(resolvedPath, path, sizeof(path) - 1);
         if (nread == -1) {
             resp->error = -EBADF;
             resp->flags = 0;
             return;
         }
-        dirPath[nread] = '\0'; 
-        if (realpath((std::string(dirPath) + "/" + std::string(pathname)).c_str(), path) == nullptr) {
+        path[nread] = '\0'; 
+        if (realpath((std::string(path) + "/" + std::string(path_arg2)).c_str(), path) == nullptr) {
             resp->error = -ENOENT;
             resp->flags = 0;
             return;
@@ -135,8 +130,7 @@ void handle_openat_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int
     checkPathesRule(path, resp, rules);
 }
 
-bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char *path, size_t len)
-{
+bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char *path, size_t len) {
     int procMemFd;
     char procMemPath[PATH_MAX];
     ssize_t nread;
@@ -144,73 +138,38 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char
     snprintf(procMemPath, sizeof(procMemPath), "/proc/%d/mem", req->pid);
 
     procMemFd = open(procMemPath, O_RDONLY | O_CLOEXEC);
-    if (procMemFd == -1)
+    if (procMemFd == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to open /proc/%d/mem: %s", req->pid, strerror(errno));
         return false;
+    }
 
-    /* Check that the process whose info we are accessing is still alive
-       and blocked in the system call that caused the notification.
-       If the SECCOMP_IOCTL_NOTIF_ID_VALID operation (performed in
-       cookieIsValid()) succeeded, we know that the /proc/PID/mem file
-       descriptor that we opened corresponded to the process for which we
-       received a notification. If that process subsequently terminates,
-       then read() on that file descriptor will return 0 (EOF). */
-
-    if (!cookieIsValid(notifyFd, req->id))
-    {
+    if (!cookieIsValid(notifyFd, req->id)) {
         close(procMemFd);
         return false;
     }
 
-    /* Read bytes at the location containing the pathname argument */
-
     nread = pread(procMemFd, path, len, req->data.args[argNum]);
-
     close(procMemFd);
 
-    if (nread <= 0)
-        return false;
-
-    /* Once again check that the notification ID is still valid. The
-       case we are particularly concerned about here is that just
-       before we fetched the pathname, the target's blocked system
-       call was interrupted by a signal handler, and after the handler
-       returned, the target carried on execution (past the interrupted
-       system call). In that case, we have no guarantees about what we
-       are reading, since the target's memory may have been arbitrarily
-       changed by subsequent operations. */
-
-    if (!cookieIsValid(notifyFd, req->id))
-    {
-        perror("\tS: notification ID check failed!!!");
+    if (nread <= 0) {
+        Logger::getInstance().log(Logger::Verbosity::WARNING, "No valid pathname read for PID %d", req->pid);
         return false;
     }
 
-    /* Even if the target's system call was not interrupted by a signal,
-       we have no guarantees about what was in the memory of the target
-       process. (The memory may have been modified by another thread, or
-       even by an external attacking process.) We therefore treat the
-       buffer returned by pread() as untrusted input. The buffer should
-       contain a terminating null byte; if not, then we will trigger an
-       error for the target process. */
+    if (!cookieIsValid(notifyFd, req->id)) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Notification ID check failed for PID %d", req->pid);
+        return false;
+    }
 
-    if (strnlen(path, nread) < nread)
+    if (strnlen(path, nread) < nread) {
         return true;
+    }
 
     return false;
 }
 
-void add_handlers(std::map<int, MapHandler>& map) {
+void add_handlers(std::unordered_map<int, MapHandler>& map) {
     map[SYS_openat] = handle_openat_restriction;
-    // map[SYS_mkdir] = handle_path_restriction;
     map[SYS_open] = handle_path_restriction;
-    // map[SYS_read] = handle_fd_restriction;
-    // map[SYS_write] = handle_fd_restriction;
-    // map[SYS_close] = handle_fd_restriction;
-    // map[SYS_lseek] = handle_fd_restriction;
-    // map[SYS_fstat] = handle_fd_restriction;
-    // map[SYS_fsync] = handle_fd_restriction;
-    // map[SYS_flock] = handle_fd_restriction;
-    // map[SYS_getdents] = handle_fd_restriction;
-    // map[SYS_getdents64] = handle_fd_restriction;
-    // map[SYS_sendfile] = handle_fd_restriction;
+    map[SYS_write] = handle_fd_restriction;
 }

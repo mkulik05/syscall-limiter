@@ -14,6 +14,7 @@ set(SRC_FILES
     src/SocketBridge/SocketBridge.cpp
     src/Supervisor/handlers/handlers.cpp
     src/Supervisor/Manager/Supervisor.cpp
+    src/Logger/Logger.cpp
 )
 
 set(HEADER_FILES
@@ -23,6 +24,7 @@ set(HEADER_FILES
     src/Supervisor/Manager/Supervisor.h
     src/Supervisor/handlers/handlers.h
     src/rules/rules.h
+    src/Logger/Logger.h
 )
 
 

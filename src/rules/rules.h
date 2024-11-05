@@ -11,7 +11,7 @@ struct Rule {
 };
 
 struct RuleInfo {
-    int pid;
+    std::vector<int> pids;
 
     std::vector<int> vec_syscalls;
 };
