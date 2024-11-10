@@ -9,22 +9,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(SRC_FILES
     src/main.cpp
-    src/seccomp/seccomp.cpp
-    src/ProcessManager/ProcessManager.cpp
-    src/SocketBridge/SocketBridge.cpp
-    src/Supervisor/handlers/handlers.cpp
-    src/Supervisor/Manager/Supervisor.cpp
-    src/Logger/Logger.cpp
+    src/logic/seccomp/seccomp.cpp
+    src/logic/ProcessManager/ProcessManager.cpp
+    src/logic/SocketBridge/SocketBridge.cpp
+    src/logic/Supervisor/handlers/handlers.cpp
+    src/logic/Supervisor/Manager/Supervisor.cpp
+    src/logic/Logger/Logger.cpp
 )
 
 set(HEADER_FILES
-    src/seccomp/seccomp.h
-    src/ProcessManager/ProcessManager.h
-    src/SocketBridge/SocketBridge.h
-    src/Supervisor/Manager/Supervisor.h
-    src/Supervisor/handlers/handlers.h
-    src/rules/rules.h
-    src/Logger/Logger.h
+    src/logic/seccomp/seccomp.h
+    src/logic/ProcessManager/ProcessManager.h
+    src/logic/SocketBridge/SocketBridge.h
+    src/logic/Supervisor/Manager/Supervisor.h
+    src/logic/Supervisor/handlers/handlers.h
+    src/logic/rules/rules.h
+    src/logic/Logger/Logger.h
 )
 
 

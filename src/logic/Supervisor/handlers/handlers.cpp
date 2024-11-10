@@ -168,8 +168,42 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char
     return false;
 }
 
+
+void handle_get_dents_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    bool pathOK;
+    char path[PATH_MAX];
+
+    int fd = req->data.args[0];
+    char fdPath[PATH_MAX];
+
+    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
+    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
+    if (nread != -1)
+        path[nread] = '\0'; 
+
+    if (nread == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to read link for FD: %d", fd);
+        return;
+    }
+    Logger::getInstance().log(Logger::Verbosity::INFO, "GET DENTS, path: %s", path);
+    checkPathesRule(path, resp, rules);
+}
+
 void add_handlers(std::unordered_map<int, MapHandler>& map) {
     map[SYS_openat] = handle_openat_restriction;
     map[SYS_open] = handle_path_restriction;
     map[SYS_write] = handle_fd_restriction;
+    map[SYS_openat2] = handle_openat_restriction;
+    map[SYS_mkdir] = handle_path_restriction;
+    map[SYS_open] = handle_path_restriction;
+    map[SYS_read] = handle_fd_restriction;
+    map[SYS_write] = handle_fd_restriction;
+    map[SYS_close] = handle_fd_restriction;
+    map[SYS_lseek] = handle_fd_restriction;
+    map[SYS_fstat] = handle_fd_restriction;
+    map[SYS_fsync] = handle_fd_restriction;
+    map[SYS_flock] = handle_fd_restriction;
+    map[SYS_getdents] = handle_get_dents_restriction;
+    map[SYS_getdents64] = handle_get_dents_restriction;
+    map[SYS_sendfile] = handle_fd_restriction;
 }

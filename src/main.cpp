@@ -26,8 +26,8 @@
 #include <sys/mman.h>
 #include <csignal>
 
-#include "Supervisor/Manager/Supervisor.h"
-#include "ProcessManager/ProcessManager.h"
+#include "logic/Supervisor/Manager/Supervisor.h"
+#include "logic/ProcessManager/ProcessManager.h"
 
 std::vector<pid_t> pids;
 
@@ -66,12 +66,21 @@ int main(int argc, char *argv[])
     //int r_id = process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp/"}, {SYS_getdents64, SYS_getdents});
     //process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp"}, {SYS_getdents64, SYS_getdents});
     //process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp/"}, {SYS_read, SYS_write});
-    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp/"}, {SYS_open, SYS_openat});
-    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp"}, {SYS_open, SYS_openat});
-    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp/build/"}, {SYS_open, SYS_openat});
+
+    // process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp/"}, {SYS_open, SYS_openat});
+    // process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp"}, {SYS_open, SYS_openat});
+    // process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp/build/"}, {SYS_open, SYS_openat});
+    
+    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp/"}, {SYS_getdents64, SYS_getdents});
+    process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/tmp"}, {SYS_getdents64, SYS_getdents});
     // process_manager->supervisor->updateRule(pid, r_id, {0, DENY_PATH_ACCESS, "/tmppp"});
     // process_manager->supervisor->deleteRule(pid, r_id);
     process_manager->startProcess(pid);
+
+    // pid_t pid = process_manager->addProcess("dolphin");
+    // process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp/build/"}, {SYS_getdents64, SYS_getdents});
+    // process_manager->supervisor->addRule(pid, {0, DENY_PATH_ACCESS, "/home/mkul1k/progs/seccomp/build"}, {SYS_getdents64, SYS_getdents});
+    // process_manager->startProcess(pid);
     for(;;) { }
  
     exit(EXIT_SUCCESS);
