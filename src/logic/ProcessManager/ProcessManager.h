@@ -5,6 +5,7 @@
 #include <vector>
 #include <thread>
 #include "../SocketBridge/SocketBridge.h"
+#include "../Supervisor/Manager/Supervisor.h"
 
 #define MSG_SIZE 512
 #define START_PROCESS_IPC_VALUE 'B'

@@ -17,7 +17,7 @@
 #include <QVector>
 #include <QString>
 
-struct RuleInfo {
+struct RuleInfoGui {
     QVector<int> syscalls;
     bool restrict_all;
     QString path_info;
@@ -27,7 +27,7 @@ class AddProcessDialog : public QDialog {
 
 public:
     AddProcessDialog(QWidget *parent);
-    AddProcessDialog(QWidget *parent, QString name, QString path, QVector<RuleInfo> rules);
+    AddProcessDialog(QWidget *parent, QString name, QString path, QVector<RuleInfoGui> rules);
 
     void addRule();
 
@@ -35,7 +35,7 @@ public:
 
     QString getName() const;
     QString getProgPath() const;
-    QVector<RuleInfo> getRules() const;
+    QVector<RuleInfoGui> getRules() const;
 
 
    

@@ -12,13 +12,14 @@
 #include <QComboBox>
 
 #include "../AddProcessW/AddProcessW.h" 
+#include "../../logic/ProcessManager/ProcessManager.h"
 
 struct ProcessInfo {
     int pid;
     QString name;
     QString path;
     QVector<int> rules_ids;
-    QVector<RuleInfo> rules;
+    QVector<RuleInfoGui> rules;
 };
 
 class MainW : public QWidget {
@@ -26,6 +27,7 @@ public:
     MainW();
 
 private:
+    ProcessManager *process_manager;
     QTableWidget *tableWidget;
     QVector<ProcessInfo> processes_info;
 

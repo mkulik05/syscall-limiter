@@ -68,7 +68,7 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     resize(600, 300);
 }
 
-AddProcessDialog::AddProcessDialog(QWidget *parent, QString name, QString path, QVector<RuleInfo> rules) : AddProcessDialog(parent)
+AddProcessDialog::AddProcessDialog(QWidget *parent, QString name, QString path, QVector<RuleInfoGui> rules) : AddProcessDialog(parent)
 {
     progNameEdit->setText(name);
     progPathEdit->setText(path);
@@ -93,7 +93,7 @@ void AddProcessDialog::TableCellDoubleClicked(int row, int column)
         return;
     }
     QString text = syscallsSels[row]->text();
-    QVector<QString> words = text.split(" ", QString::SkipEmptyParts).toVector();
+    QVector<QString> words = text.split(" ", Qt::SkipEmptyParts).toVector();
     AddSyscallsW dialog(this, syscalls, words);
     if (dialog.exec() == QDialog::Accepted)
     {
@@ -110,13 +110,13 @@ void AddProcessDialog::TableCellDoubleClicked(int row, int column)
 
 QString AddProcessDialog::getName() const { return progNameEdit->text(); }
 QString AddProcessDialog::getProgPath() const { return progPathEdit->text(); }
-QVector<RuleInfo> AddProcessDialog::getRules() const
+QVector<RuleInfoGui> AddProcessDialog::getRules() const
 {
-    QVector<RuleInfo> res = {};
+    QVector<RuleInfoGui> res = {};
     for (int row = 0; row < rulesTable->rowCount(); row++)
     {
         QString text = syscallsSels[row]->text();
-        QVector<QString> words = text.split(" ", QString::SkipEmptyParts).toVector();
+        QVector<QString> words = text.split(" ", Qt::SkipEmptyParts).toVector();
 
         QVector<int> res_syscalls = {};
         for (int i = 0; i < words.size(); i++)

@@ -101,7 +101,7 @@ void ProcessManager::startProcess(pid_t pid) {
     // }
 
     // waiting for target process to start 
-    sleep(1);
+    usleep(100000); // 100ms
 
     Logger::getInstance().log(Logger::Verbosity::INFO, "SIGCONT sender: Starting process with PID: %d", pid);
     kill(pid, SIGCONT);
