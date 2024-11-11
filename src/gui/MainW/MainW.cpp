@@ -1,4 +1,5 @@
 #include "MainW.h"
+#include <QMessageBox>
 #include "../AddProcessW/AddProcessW.h"
 #include "../../logic/rules/rules.h"
 
@@ -39,6 +40,10 @@ void MainW::addElement()
         QVector<RuleInfoGui> rules = dialog.getRules();
 
         pid_t pid = process_manager->addProcess(path.toStdString());
+        if (pid == -1) {
+            QMessageBox::warning(this, "Unexpected error occurred", "Process have not started successfully", QMessageBox::Ok);
+            return;
+        }
 
         QVector<int> rules_ids = {};
         for (int i = 0; i < rules.size(); i++)
@@ -47,6 +52,7 @@ void MainW::addElement()
             int id = process_manager->supervisor->addRule(pid, {0, rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, rules[i].path_info.toStdString()}, syscalls);
             rules_ids.append(id);
         }
+
         process_manager->startProcess(pid);
 
         processes_info.append({pid, name, path, rules_ids, rules});
@@ -76,11 +82,20 @@ void MainW::editElement(QTableWidgetItem *item)
             tableWidget->item(row, 0)->setText(name);
             processes_info[row].name = name;
 
-            QVector<int> rules_ids = {};
+            std::vector<std::pair<Rule, std::vector<int>>> new_rules_info = {};
+
             for (int i = 0; i < new_rules.size(); i++)
             {
+                std::vector<int> syscalls(new_rules[i].syscalls.begin(), new_rules[i].syscalls.end());
+                new_rules_info.push_back({{0, new_rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, new_rules[i].path_info.toStdString()}, syscalls});
             }
+
+            std::vector<int> old_rules_ids(processes_info[row].rules_ids.begin(), processes_info[row].rules_ids.end());
+
+            std::vector<int> rules_ids = process_manager->supervisor->updateRules(processes_info[row].pid, old_rules_ids, new_rules_info);
             processes_info[row].rules = new_rules;
+            processes_info[row].rules_ids = QVector<int>(rules_ids.begin(), rules_ids.end());
+
         }
     }
 }

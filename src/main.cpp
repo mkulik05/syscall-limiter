@@ -54,10 +54,10 @@ void setSygHandlers() {
     std::signal(SIGSTOP, signalHandler);
 }
 
-
+const char *program_pathname;
 int main(int argc, char *argv[])
 {
-
+    program_pathname = argv[0];
     setSygHandlers();
     setbuf(stdout, NULL);
     

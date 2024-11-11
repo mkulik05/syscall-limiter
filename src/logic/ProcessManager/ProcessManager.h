@@ -8,7 +8,7 @@
 #include "../Supervisor/Manager/Supervisor.h"
 
 #define MSG_SIZE 512
-#define START_PROCESS_IPC_VALUE 'B'
+#define START_PROCESS_IPC_VALUE 'C'
 #define START_PROCESS_RETURN_PID 78
 
 // Used for sending execution commands to process_starter

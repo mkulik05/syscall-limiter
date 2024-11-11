@@ -4,35 +4,35 @@
 #include <stdlib.h>
 #include <iostream>
 
-int main() {
+void createChildProcess(int depth) {
+    if (depth == 0) return; // Base case to stop recursion
+
     int pid = fork();
     if (pid < 0) {
-        perror("Fork failed");
+        perror(("Fork failed at depth " + std::to_string(depth)).c_str());
         exit(EXIT_FAILURE);
     }
 
     if (pid == 0) {
-        int fd = open("child_file.txt", O_CREAT | O_WRONLY, 0644);
+
+        int fd = open("child_file.txt", O_CREAT | O_WRONLY | O_APPEND, 0644);
         if (fd < 0) {
-            perror("Child: open failed");
-            exit(EXIT_FAILURE);
+            perror(("Child: open failed at depth " + std::to_string(depth)).c_str());
+            createChildProcess(depth - 1);
+            return;
         }
+        std::cout << "Child process (PID: " << getpid() << ") created child.\n";
         close(fd);
-        std::cout << "DONE\n";
-        return 0;
-    } 
 
-    std::cout << pid;
-    int fd = open("../parent_file.txt", O_CREAT | O_WRONLY, 0644);
-    if (fd < 0) {
-        perror("Parent: open failed");
-        exit(EXIT_FAILURE);
-    } 
+        createChildProcess(depth - 1);
+        return;
+    }
 
-    std::cout << "DONE2\n";
 
-    close(fd);
-    
+    std::cout << "Parent process (PID: " << getpid() << ") created child (PID: " << pid << ").\n";
+}
 
-    return 0;    
+int main() {
+    createChildProcess(5);
+    return 0;
 }

@@ -32,6 +32,7 @@
 bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
                   int argNum, char *path, size_t len);
 
+
 void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rule>& rules) {
     for (int i = 0; i < rules.size(); i++) {
         Rule rule = rules[i];
@@ -42,6 +43,7 @@ void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rul
             return;
 
         case DENY_PATH_ACCESS:
+            // Logger::getInstance().log(Logger::Verbosity::ERROR, "checkPathesRule: path: %s, rule path: %s", path.c_str(), rule.path.c_str());
             if (strncmp(path.c_str(), rule.path.c_str(), strlen(rule.path.c_str())) == 0) {
                 resp->error = -EACCES;
                 resp->flags = 0;
@@ -83,7 +85,7 @@ void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int not
     checkPathesRule(path, resp, rules);
 }
 
-void handle_openat_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
     char path[PATH_MAX];
     int dirfd = req->data.args[0]; // dirfd
     char path_arg2[PATH_MAX];
@@ -186,24 +188,110 @@ void handle_get_dents_restriction(seccomp_notif *req, seccomp_notif_resp *resp, 
         return;
     }
     Logger::getInstance().log(Logger::Verbosity::INFO, "GET DENTS, path: %s", path);
-    checkPathesRule(path, resp, rules);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "before: write resp flags: %d, error: %d", resp->flags, resp->error);
+    std::string path_str(path);
+    checkPathesRule(path_str, resp, rules);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "write resp flags: %d, error: %d", resp->flags, resp->error);
+}
+
+
+void handle_write_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    bool pathOK;
+    char path[PATH_MAX];
+
+    int fd = req->data.args[0];
+    char fdPath[PATH_MAX];
+
+    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
+    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
+    if (nread != -1)
+        path[nread] = '\0'; 
+
+    if (nread == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to read link for FD: %d", fd);
+        return;
+    }
+    Logger::getInstance().log(Logger::Verbosity::INFO, "Target write path: %s", path);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "before: write resp flags: %d, error: %d", resp->flags, resp->error);
+    std::string path_str(path);
+    checkPathesRule(path_str, resp, rules);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "write resp flags: %d, error: %d", resp->flags, resp->error);
 }
 
 void add_handlers(std::unordered_map<int, MapHandler>& map) {
-    map[SYS_openat] = handle_openat_restriction;
+    
     map[SYS_open] = handle_path_restriction;
-    map[SYS_write] = handle_fd_restriction;
-    map[SYS_openat2] = handle_openat_restriction;
+    map[SYS_close] = handle_fd_restriction;
+
+    map[SYS_stat] = handle_path_restriction;
+    map[SYS_fstat] = handle_fd_restriction;
+    map[SYS_lstat] = handle_fd_restriction;
+    map[SYS_newfstatat] = handle_fd_path_restriction;
+
+    map[SYS_access] = handle_path_restriction;
+    map[SYS_faccessat] = handle_fd_path_restriction;
+    map[SYS_faccessat2] = handle_fd_path_restriction;
+    
+    // add rename, renameat, renameat2
+    
     map[SYS_mkdir] = handle_path_restriction;
-    map[SYS_open] = handle_path_restriction;
+    map[SYS_mkdirat] = handle_fd_path_restriction;
+    map[SYS_rmdir] = handle_path_restriction;
+    map[SYS_creat] = handle_path_restriction;
+    
+    // link, linkat
+    
+    map[SYS_unlink] = handle_path_restriction;
+    map[SYS_unlinkat] = handle_fd_path_restriction;
+    
+    // symlink, symlinkat
+    
+    map[SYS_readlink] = handle_path_restriction;
+    map[SYS_readlinkat] = handle_fd_path_restriction;
+    
+    map[SYS_chmod] = handle_path_restriction;
+    map[SYS_fchmod] = handle_fd_restriction;
+    map[SYS_fchmodat] = handle_fd_path_restriction;
+    
+    map[SYS_chown] = handle_path_restriction;
+    map[SYS_fchown] = handle_fd_restriction;
+    map[SYS_lchown] = handle_path_restriction;
+    map[SYS_fchownat] = handle_fd_path_restriction;   
+    
+    map[SYS_chdir] = handle_path_restriction;
+    map[SYS_fchdir] = handle_fd_restriction;
+    
+    map[SYS_statfs] = handle_path_restriction;
+    map[SYS_fstatfs] = handle_fd_restriction;
+    map[SYS_statfs] = handle_path_restriction;
+    map[SYS_fstatfs] = handle_fd_restriction;
+    
+    // mount
+
+    map[SYS_umount2] = handle_path_restriction;
+    
+    map[SYS_openat] = handle_fd_path_restriction;
+    map[SYS_openat2] = handle_fd_path_restriction;
+    
+    map[SYS_mknod] = handle_path_restriction;
+    map[SYS_mknodat] = handle_fd_path_restriction;
+    
+    map[SYS_utimensat] = handle_fd_path_restriction;
+    map[SYS_futimesat] = handle_fd_path_restriction;
+    
+    map[SYS_name_to_handle_at] = handle_fd_path_restriction;
+    map[SYS_open_by_handle_at] = handle_fd_restriction;
+
     map[SYS_read] = handle_fd_restriction;
     map[SYS_write] = handle_fd_restriction;
-    map[SYS_close] = handle_fd_restriction;
-    map[SYS_lseek] = handle_fd_restriction;
-    map[SYS_fstat] = handle_fd_restriction;
-    map[SYS_fsync] = handle_fd_restriction;
-    map[SYS_flock] = handle_fd_restriction;
+
     map[SYS_getdents] = handle_get_dents_restriction;
     map[SYS_getdents64] = handle_get_dents_restriction;
+    map[SYS_read] = handle_get_dents_restriction;
+
+    map[SYS_lseek] = handle_fd_restriction;
+    map[SYS_fsync] = handle_fd_restriction;
+    map[SYS_flock] = handle_fd_restriction;
     map[SYS_sendfile] = handle_fd_restriction;
+
 }

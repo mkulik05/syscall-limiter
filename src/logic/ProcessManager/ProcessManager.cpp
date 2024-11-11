@@ -34,6 +34,9 @@
 #include "../ProcessManager/ProcessManager.h"
 #include "../Logger/Logger.h" 
 
+
+extern const char *program_pathname;
+
 ProcessManager::ProcessManager()
 {   
     this->start_process_msg_type = 1;
@@ -115,21 +118,27 @@ void ProcessManager::broadcast_signal(int sygn_n) {
     kill(this->supervisor->pid, sygn_n);
 }
 
+
 pid_t ProcessManager::addProcess(std::string cmd) {
-    key_t key = ftok("tmp2222", START_PROCESS_IPC_VALUE);
+    key_t key = ftok(program_pathname, START_PROCESS_IPC_VALUE);
+    if (key == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "ftok error: %s", strerror(errno));
+        return -1;
+    }
+    
     int msgid = msgget(key, 0666 | IPC_CREAT);
 
     if (msgid == -1) {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "msgget error: %s", strerror(errno));
-        return 1;
+        return -1;
     }
     struct msg_buffer message;
-    message.msg_type = this->start_process_msg_type;
+    message.msg_type = 1;
     strncpy(message.msg_text, cmd.c_str(), sizeof(message.msg_text));
-    this->start_process_msg_type += 1;
+    // this->start_process_msg_type += 1;
     if (msgsnd(msgid, &message, cmd.length(), 0) == -1) {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "msgsnd error: %s", strerror(errno));
-        return 1;
+        return -1;
     }
     Logger::getInstance().log(Logger::Verbosity::INFO, "Adding process: before receiving new proc fd");
     int process_pid = this->started_pids_bridge->recv_int();
@@ -158,8 +167,12 @@ void ProcessManager::process_starter() {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter prctl error: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
-        
-    key_t key = ftok("tmp2222", START_PROCESS_IPC_VALUE);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "ftok file key: %s", program_pathname);
+    key_t key = ftok(program_pathname, START_PROCESS_IPC_VALUE);
+    if (key == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter ftok error: %s", strerror(errno));
+        return;
+    }
     int msgid = msgget(key, 0666 | IPC_CREAT);
     Logger::getInstance().log(Logger::Verbosity::INFO, "\n%d", msgid);
     if (msgid == -1) {
@@ -177,17 +190,16 @@ void ProcessManager::process_starter() {
 
     Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: sent fd");
 
-    if (close(notifyFd) == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter close-fd error: %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
+    // if (close(notifyFd) == -1) {
+    //     Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter close-fd error: %s", strerror(errno));
+    //     exit(EXIT_FAILURE);
+    // }
 
     struct msg_buffer message;
 
-    long counter = 1;
     for (;;) {
         Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: waiting for command to start");
-        size_t n = msgrcv(msgid, &message, sizeof(message.msg_text), counter, 0);
+        size_t n = msgrcv(msgid, &message, sizeof(message.msg_text), 1, 0);
         Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: got command");
         if (n == -1) {
             Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter: msgrcv error: %s", strerror(errno));
@@ -212,9 +224,9 @@ void ProcessManager::process_starter() {
             // Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process resumed");
             execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process finished");
+            for(;;){}
             exit(EXIT_SUCCESS);
         }
-        counter++;
     }
     Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: finished execution");
 }
