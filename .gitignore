@@ -1,5 +1,6 @@
 .vscode
 main
 test_folder
+tempdir
 build
-benchmarks/a.out
+a.out

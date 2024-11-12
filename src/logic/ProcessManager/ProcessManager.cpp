@@ -28,6 +28,8 @@
 #include <sys/msg.h>
 #include <sys/wait.h>
 #include <fstream>
+#include <sys/types.h>
+#include <pwd.h>
 
 #include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
@@ -163,6 +165,29 @@ void ProcessManager::start_supervisor(pid_t starter_pid) {
 }
 
 void ProcessManager::process_starter() {
+    uid_t euid = geteuid();
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "User euid: %d", euid);
+    if (euid == 0) {
+        struct passwd *pw = getpwnam("mkul1k"); 
+        if (pw == nullptr) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (retr user info)");
+            err(EXIT_FAILURE, "Failed to drop priviledges (retr user info)");
+        }
+        if (setregid(pw->pw_gid, pw->pw_gid) != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setgid)");
+            err(EXIT_FAILURE, "Failed to drop priviledges (setgid)");
+        }
+
+        if (setreuid(pw->pw_uid, pw->pw_uid) != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setuid)");
+            err(EXIT_FAILURE, "Failed to drop priviledges (setuid)");
+        }
+
+    } else {
+        err(EXIT_FAILURE, "Program needs root permissions");
+    }
+    euid = geteuid();
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "User euid2: %d", euid);
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter prctl error: %s", strerror(errno));
         exit(EXIT_FAILURE);
@@ -174,7 +199,6 @@ void ProcessManager::process_starter() {
         return;
     }
     int msgid = msgget(key, 0666 | IPC_CREAT);
-    Logger::getInstance().log(Logger::Verbosity::INFO, "\n%d", msgid);
     if (msgid == -1) {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter msgget error: %s", strerror(errno));
         return;

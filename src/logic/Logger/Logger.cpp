@@ -20,7 +20,7 @@ std::string generateLogFilePath() {
 }
 
 Logger::Logger() : verbosityLevel(Verbosity::DEBUG) {
-    logFilePath = generateLogFilePath();
+    logFilePath = "/tmp/" + generateLogFilePath();
     logFile.open(logFilePath, std::ios::app);
 }
 

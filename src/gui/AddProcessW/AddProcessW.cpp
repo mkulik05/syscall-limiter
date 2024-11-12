@@ -12,19 +12,20 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <unordered_map>
+#include <set>
 #include <sys/syscall.h>
 
 #include "../AddSyscallsW/AddSyscallsW.h"
 
-QStringList syscalls = {"open", "close", "stat", "fstat", "lstat", "newfstatat", "access", "faccessat", "faccessat2", "mkdir", "mkdirat", "rmdir", "creat", "unlink", "unlinkat", "readlink", "readlinkat", "chmod", "fchmod", "fchmodat", "chown", "fchown", "lchown", "fchownat", "chdir", "fchdir", "statfs", "fstatfs", "umount2", "openat", "openat2", "mknod", "mknodat", "utimensat", "futimesat", "name_to_handle_at", "open_by_handle_at", "read", "write", "getdents", "getdents64", "lseek", "fsync", "flock", "sendfile"};
-std::unordered_map<QString, int> syscallMap = {{"open", SYS_open}, {"close", SYS_close}, {"stat", SYS_stat}, {"fstat", SYS_fstat}, {"lstat", SYS_lstat}, {"newfstatat", SYS_newfstatat}, {"access", SYS_access}, {"faccessat", SYS_faccessat}, {"faccessat2", SYS_faccessat2}, {"mkdir", SYS_mkdir}, {"mkdirat", SYS_mkdirat}, {"rmdir", SYS_rmdir}, {"creat", SYS_creat}, {"unlink", SYS_unlink}, {"unlinkat", SYS_unlinkat}, {"readlink", SYS_readlink}, {"readlinkat", SYS_readlinkat}, {"chmod", SYS_chmod}, {"fchmod", SYS_fchmod}, {"fchmodat", SYS_fchmodat}, {"chown", SYS_chown}, {"fchown", SYS_fchown}, {"lchown", SYS_lchown}, {"fchownat", SYS_fchownat}, {"chdir", SYS_chdir}, {"fchdir", SYS_fchdir}, {"statfs", SYS_statfs}, {"fstatfs", SYS_fstatfs}, {"umount2", SYS_umount2}, {"openat", SYS_openat}, {"openat2", SYS_openat2}, {"mknod", SYS_mknod}, {"mknodat", SYS_mknodat}, {"utimensat", SYS_utimensat}, {"futimesat", SYS_futimesat}, {"name_to_handle_at", SYS_name_to_handle_at}, {"open_by_handle_at", SYS_open_by_handle_at}, {"read", SYS_read}, {"write", SYS_write}, {"getdents", SYS_getdents}, {"getdents64", SYS_getdents64}, {"lseek", SYS_lseek}, {"fsync", SYS_fsync}, {"flock", SYS_flock}, {"sendfile", SYS_sendfile}};
-std::unordered_map<int, QString> invertedSyscallMap = {{SYS_open, "open"}, {SYS_close, "close"}, {SYS_stat, "stat"}, {SYS_fstat, "fstat"}, {SYS_lstat, "lstat"}, {SYS_newfstatat, "newfstatat"}, {SYS_access, "access"}, {SYS_faccessat, "faccessat"}, {SYS_faccessat2, "faccessat2"}, {SYS_mkdir, "mkdir"}, {SYS_mkdirat, "mkdirat"}, {SYS_rmdir, "rmdir"}, {SYS_creat, "creat"}, {SYS_unlink, "unlink"}, {SYS_unlinkat, "unlinkat"}, {SYS_readlink, "readlink"}, {SYS_readlinkat, "readlinkat"}, {SYS_chmod, "chmod"}, {SYS_fchmod, "fchmod"}, {SYS_fchmodat, "fchmodat"}, {SYS_chown, "chown"}, {SYS_fchown, "fchown"}, {SYS_lchown, "lchown"}, {SYS_fchownat, "fchownat"}, {SYS_chdir, "chdir"}, {SYS_fchdir, "fchdir"}, {SYS_statfs, "statfs"}, {SYS_fstatfs, "fstatfs"}, {SYS_umount2, "umount2"}, {SYS_openat, "openat"}, {SYS_openat2, "openat2"}, {SYS_mknod, "mknod"}, {SYS_mknodat, "mknodat"}, {SYS_utimensat, "utimensat"}, {SYS_futimesat, "futimesat"}, {SYS_name_to_handle_at, "name_to_handle_at"}, {SYS_open_by_handle_at, "open_by_handle_at"}, {SYS_read, "read"}, {SYS_write, "write"}, {SYS_getdents, "getdents"}, {SYS_getdents64, "getdents64"}, {SYS_lseek, "lseek"}, {SYS_fsync, "fsync"}, {SYS_flock, "flock"}, {SYS_sendfile, "sendfile"}};
+extern QStringList syscalls;
+extern std::unordered_map<QString, int> syscallMap;
+extern std::unordered_map<int, QString> invertedSyscallMap;
+extern std::unordered_map<QString, QStringList> groups;
 
 AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 {
     setWindowTitle("Process Manager");
     setModal(true);
-
     syscallsSels = {};
     ruleTypeSels = {};
     restrictPath = {};
@@ -118,13 +119,27 @@ QVector<RuleInfoGui> AddProcessDialog::getRules() const
         QString text = syscallsSels[row]->text();
         QVector<QString> words = text.split(" ", Qt::SkipEmptyParts).toVector();
 
-        QVector<int> res_syscalls = {};
+        std::set<int> res_syscalls = {};
         for (int i = 0; i < words.size(); i++)
         {
-            res_syscalls.append(syscallMap[words[i]]);
+            // check is it a group
+            if (syscallMap.count(words[i]) == 0) {
+                qInfo() << words[i] << "\n"; 
+                for (int j = 0; j < groups[words[i]].size(); j++) {
+                    res_syscalls.insert(syscallMap[groups[words[i]][j]]);
+                }
+            } else {
+                res_syscalls.insert(syscallMap[words[i]]);
+            }
+            
         }
 
-        res.append({res_syscalls,
+    
+        QVector<int> qvec_res_syscalls = {};
+        for (const int& value : res_syscalls) {
+            qvec_res_syscalls.append(value);
+        }
+        res.append({qvec_res_syscalls,
                     ruleTypeSels[row]->currentIndex() == 0,
                     restrictPath[row]->text()});
     }
