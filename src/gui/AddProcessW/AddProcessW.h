@@ -17,17 +17,14 @@
 #include <QVector>
 #include <QString>
 
-struct RuleInfoGui {
-    QVector<int> syscalls;
-    bool restrict_all;
-    QString path_info;
-};
+
+#include "../ProcessInfo.h"
 
 class AddProcessDialog : public QDialog {
-
+Q_OBJECT
 public:
     AddProcessDialog(QWidget *parent);
-    AddProcessDialog(QWidget *parent, QString name, QString path, QVector<RuleInfoGui> rules);
+    AddProcessDialog(QWidget *parent, ProcessInfo& process_info);
 
     void addRule();
 
@@ -36,13 +33,17 @@ public:
     QString getName() const;
     QString getProgPath() const;
     QVector<RuleInfoGui> getRules() const;
-
+    int getMaxMem() const;
+    int getMaxTime() const;
 
    
 private:
     void TableCellDoubleClicked(int row, int column);
     QLineEdit *progNameEdit;
     QLineEdit *progPathEdit;
+    
+    QLineEdit *progMaxMemEdit;
+    QLineEdit *progMaxTimeEdit;
     std::vector<QLabel*> syscallsSels;      
     std::vector<QComboBox*> ruleTypeSels; 
     std::vector<QLineEdit*> restrictPath; 

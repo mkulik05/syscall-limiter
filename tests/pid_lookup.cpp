@@ -6,7 +6,7 @@
 pid_t getParentPID(pid_t pid) {
     std::ifstream statFile("/proc/" + std::to_string(pid) + "/stat");
     if (!statFile.is_open()) {
-        return -1; // Return -1 if the process does not exist or cannot be opened
+        return -1; 
     }
 
     std::string line;
@@ -14,14 +14,14 @@ pid_t getParentPID(pid_t pid) {
         std::istringstream iss(line);
         std::string token;
         for (int i = 0; i < 3; ++i) {
-            iss >> token; // Skip the first three tokens
+            iss >> token; 
         }
         pid_t ppid;
-        iss >> ppid; // The fourth token is the parent PID
+        iss >> ppid; 
         return ppid;
     }
 
-    return -1; // In case of failure to read
+    return -1;
 }
 
 int main() {

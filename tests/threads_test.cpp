@@ -3,10 +3,10 @@
 #include <chrono>
 #include <atomic>
 #include <csignal>
-#include <unistd.h> // for getpid()
-#include <fcntl.h>  // for open
-#include <cstring>  // for strerror
-#include <ctime>    // for time_t, localtime, strftime
+#include <unistd.h> 
+#include <fcntl.h>  
+#include <cstring>  
+#include <ctime>    
 
 std::atomic<bool> running(true);
 const char* filename = "/tmp/output.txt";
@@ -38,7 +38,7 @@ std::string getCurrentTime() {
 
 void threadFunction(int id) {
     while (running) {
-        pid_t tgid = getpid(); // Get the TGID (same as PID)
+        pid_t tgid = getpid();
         std::string message = "[" + getCurrentTime() + "] Thread " + std::to_string(id) +
                               " (ID: " + std::to_string(std::hash<std::thread::id>()(std::this_thread::get_id())) +
                               ") is running. \nPID (Process ID): " + std::to_string(tgid) + "\n\n";
@@ -56,14 +56,13 @@ void signalHandler(int signum) {
 }
 
 int main() {
-    // Register signal handler
+
     std::signal(SIGINT, signalHandler);
 
-    // Create two threads
     std::thread thread1(threadFunction, 1);
     std::thread thread2(threadFunction, 2);
 
-    // Wait for threads to finish
+
     thread1.join();
     thread2.join();
 

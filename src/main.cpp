@@ -76,10 +76,17 @@ void setSygHandlers() {
 const char *program_pathname;
 int main(int argc, char *argv[])
 {
+
     program_pathname = argv[0];
     setSygHandlers();
     setbuf(stdout, NULL);
 
+
+    uid_t euid = geteuid();
+    if (euid != 0) {
+        std::cout << "Program should be run with root" << std::endl;
+        exit(EXIT_SUCCESS);
+    }
 
     for (auto it = groups.begin(); it != groups.end(); ++it) {
         syscalls.append(it->first);

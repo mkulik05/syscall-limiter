@@ -1,4 +1,4 @@
-
+#pragma once
 #include <QApplication>
 #include <QPushButton>
 #include <QTableWidget>
@@ -13,18 +13,14 @@
 
 #include "../AddProcessW/AddProcessW.h" 
 #include "../../logic/ProcessManager/ProcessManager.h"
-
-struct ProcessInfo {
-    int pid;
-    QString name;
-    QString path;
-    QVector<int> rules_ids;
-    QVector<RuleInfoGui> rules;
-};
+#include "../ProcessInfo.h"
 
 class MainW : public QWidget {
+Q_OBJECT
+
 public:
     MainW();
+    ~MainW();
 
 private:
     ProcessManager *process_manager;

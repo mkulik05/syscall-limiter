@@ -43,6 +43,9 @@ Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd
 
 void Supervisor::run(int notifyFd)
 {
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "Supervisor euid now: %d", geteuid());
+    
+
     struct seccomp_notif *req;
     struct seccomp_notif_resp *resp;
     struct seccomp_notif_sizes sizes;
@@ -224,9 +227,9 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
 
     // Logger::getInstance().log(Logger::Verbosity::INFO, "Syscall n: %d; pid: %d", req->data.nr, req->pid);
     // printMap3(map_all_rules);
-    if (this->map_all_rules.count(req->pid) == 0)
+    if ((this->map_all_rules.size() != 0) && (this->map_all_rules.count(req->pid) == 0))
     {
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Finding rules for PID: %d", req->pid);
+        Logger::getInstance().log(Logger::Verbosity::DEBUG, "Finding rules for PID: %d", req->pid);
         int pid = req->pid;
         while (pid != 1)
         {
@@ -238,7 +241,7 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
                 pid = pid2;
                 if (this->map_all_rules.count(pid) != 0)
                 {
-                    Logger::getInstance().log(Logger::Verbosity::INFO, "TGID found: %d", pid);
+                    Logger::getInstance().log(Logger::Verbosity::DEBUG, "TGID found: %d", pid);
                     map_all_rules[req->pid] = map_all_rules[pid];
                     for (int i = 0; i < map_pid_rules[pid].size(); i++)
                     {
@@ -256,7 +259,7 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
 
             if (this->map_all_rules.count(pid) != 0)
             {
-                Logger::getInstance().log(Logger::Verbosity::INFO, "PID found: %d", pid);
+                Logger::getInstance().log(Logger::Verbosity::DEBUG, "PID found: %d", pid);
                 map_all_rules[req->pid] = map_all_rules[pid];
                 for (int i = 0; i < map_pid_rules[pid].size(); i++)
                 {
@@ -266,7 +269,7 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
                 break;
             }
         }
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Found rules for PID: %d", pid);
+        Logger::getInstance().log(Logger::Verbosity::DEBUG, "Found rules for PID: %d", pid);
     }
 
     // printMap(map_all_rules[req->pid]);

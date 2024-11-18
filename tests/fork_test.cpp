@@ -5,7 +5,7 @@
 #include <iostream>
 
 void createChildProcess(int depth) {
-    if (depth == 0) return; // Base case to stop recursion
+    if (depth == 0) return;
 
     int pid = fork();
     if (pid < 0) {

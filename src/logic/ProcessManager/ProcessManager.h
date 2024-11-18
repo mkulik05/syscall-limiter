@@ -20,11 +20,12 @@ struct msg_buffer {
 class ProcessManager {
     public:
         ProcessManager();
+        ~ProcessManager();
         void broadcast_signal(int sig_n);
         pid_t addProcess(std::string cmd);
         void startProcess(pid_t pid);
+        int setMemTime(pid_t pid, std::string maxMem, int maxTime);
 
-        // pid_t startProcess(std::string cmd, Rule ...ules);
         Supervisor* supervisor;
         
     private:
@@ -37,10 +38,11 @@ class ProcessManager {
         SocketBridge* fd_bridge;
         SocketBridge* started_pids_bridge;
 
-        // To distinguish msgs
-        long start_process_msg_type; 
 
         std::vector<pid_t> startedPIDs;
 
-        std::thread thread_supervisor;
+        std::thread thread_supervisor, thread_process_starter;
+
+        std::unordered_map<int, std::string> map_cgroup;
+        std::string cgroup_path;
 };

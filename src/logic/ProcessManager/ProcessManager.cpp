@@ -30,6 +30,7 @@
 #include <fstream>
 #include <sys/types.h>
 #include <pwd.h>
+#include <sys/resource.h>
 
 #include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
@@ -39,12 +40,24 @@
 
 extern const char *program_pathname;
 
+std::string getCgroupMountPoint();
+
+ProcessManager::~ProcessManager() {
+    broadcast_signal(SIGKILL);
+    this->thread_supervisor.~thread();
+    delete this->started_pids_bridge;
+    delete this->fd_bridge;
+}
+
 ProcessManager::ProcessManager()
 {   
-    this->start_process_msg_type = 1;
+    Logger::getInstance().setVerbosity(Logger::Verbosity::INFO);
+    this->cgroup_path = getCgroupMountPoint();
+    this->map_cgroup = {};
     this->startedPIDs = std::vector<pid_t>();
     this->fd_bridge = new SocketBridge();
     this->started_pids_bridge = new SocketBridge();
+
 
     pid_t targetPid = fork();
 
@@ -59,13 +72,85 @@ ProcessManager::ProcessManager()
         this->thread_supervisor = std::thread([this, targetPid]() {
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Before starting supervisor in sep thread");
             this->start_supervisor(targetPid);
+            Logger::getInstance().log(Logger::Verbosity::DEBUG, "After starting supervisor in sep thread");
         });
+
         this->process_starter_pid = targetPid;
         return;
-    }    
-    
+    } 
+       
     this->process_starter();
     exit(EXIT_SUCCESS);
+}
+
+std::string getCgroupMountPoint() {
+    std::ifstream mountsFile("/proc/mounts");
+    if (!mountsFile.is_open()) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Error opening /proc/mounts");
+        return "";
+    }
+
+    std::string line;
+    while (std::getline(mountsFile, line)) {
+        std::istringstream iss(line);
+        std::string device, mountPoint, fstype, options;
+
+        if (iss >> device >> mountPoint >> fstype >> options) {
+            if (mountPoint.find("cgroup") != std::string::npos) {
+                mountsFile.close();
+                return mountPoint;
+            }
+        }
+    }
+
+    mountsFile.close();
+    return "";
+}
+
+int writeToFile(const std::string& path, const std::string& content) {
+    std::ofstream file(path);
+    if (file.is_open()) {
+        file << content;
+        file.close();
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+
+int ProcessManager::setMemTime(pid_t pid, std::string maxMem, int maxTime) {
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "Updating maxMem and maxTime");
+    
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "euid is %d", getuid());
+
+    
+    if (cgroup_path == "") {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "cgroup_path is empty, skipping: %s", strerror(errno));
+        return -1;
+    }
+    
+    std::string path;
+    if (this->map_cgroup.count(pid) == 0) {
+        path = cgroup_path + "/map_control-" + std::to_string(pid) + "-" + std::to_string(std::rand());
+        if(mkdir(path.c_str(), 0777) == -1) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to create folder: %s", strerror(errno));
+            return -1;
+        }
+        if(writeToFile(path + "/cgroup.procs", std::to_string(pid)) == -1) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup pid: %s", strerror(errno));
+            return -1;
+        }
+        this->map_cgroup[pid] = path;
+    } else {
+        path = map_cgroup[pid];
+    }
+    if(writeToFile(path + "/memory.max", maxMem) == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup memory.max: %s", strerror(errno));
+        return -1;
+    }
+
+    return 0;
 }
 
 bool is_process_suspended(pid_t pid) {
@@ -95,17 +180,6 @@ bool is_process_suspended(pid_t pid) {
 }
 
 void ProcessManager::startProcess(pid_t pid) {    
-    // waiting for target process to start 
-    // while (kill(pid, 0) == -1) {
-    //     Logger::getInstance().log(Logger::Verbosity::INFO, "SIGCONT sender: waiting for process to start: %d", pid);
-    //     if (errno != ESRCH) {
-    //         break;
-    //     }
-    //     // 10ms
-    //     usleep(10000);
-    // }
-
-    // waiting for target process to start 
     usleep(100000); // 100ms
 
     Logger::getInstance().log(Logger::Verbosity::INFO, "SIGCONT sender: Starting process with PID: %d", pid);
@@ -159,35 +233,31 @@ void ProcessManager::start_supervisor(pid_t starter_pid) {
     Logger::getInstance().log(Logger::Verbosity::INFO, "%d", 47);
     this->fd_bridge;
 
-    delete this->fd_bridge;
 
     this->supervisor->run(notifyFd);
 }
 
 void ProcessManager::process_starter() {
-    uid_t euid = geteuid();
-    Logger::getInstance().log(Logger::Verbosity::DEBUG, "User euid: %d", euid);
-    if (euid == 0) {
-        struct passwd *pw = getpwnam("mkul1k"); 
-        if (pw == nullptr) {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (retr user info)");
-            err(EXIT_FAILURE, "Failed to drop priviledges (retr user info)");
-        }
-        if (setregid(pw->pw_gid, pw->pw_gid) != 0) {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setgid)");
-            err(EXIT_FAILURE, "Failed to drop priviledges (setgid)");
-        }
 
-        if (setreuid(pw->pw_uid, pw->pw_uid) != 0) {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setuid)");
-            err(EXIT_FAILURE, "Failed to drop priviledges (setuid)");
-        }
-
-    } else {
-        err(EXIT_FAILURE, "Program needs root permissions");
+    struct stat info;
+    stat(program_pathname, &info);
+    struct passwd *pw = getpwuid(info.st_uid);  
+    if (setregid(info.st_gid, info.st_gid) != 0) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setregid)");
+        err(EXIT_FAILURE, "Failed to drop priviledges (setregid)");
     }
-    euid = geteuid();
-    Logger::getInstance().log(Logger::Verbosity::DEBUG, "User euid2: %d", euid);
+
+    if (setreuid(info.st_uid, info.st_uid) != 0) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setreuid)");
+        err(EXIT_FAILURE, "Failed to drop priviledges (setreuid)");
+    } 
+    
+    if (pw->pw_dir) {
+        setenv("HOME", pw->pw_dir, 1);
+    }
+
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "User euid: %d", geteuid());
+
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter prctl error: %s", strerror(errno));
         exit(EXIT_FAILURE);

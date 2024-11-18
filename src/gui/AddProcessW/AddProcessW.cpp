@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <set>
 #include <sys/syscall.h>
+#include <QIntValidator>
 
 #include "../AddSyscallsW/AddSyscallsW.h"
 
@@ -36,8 +37,26 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     progNameEdit = new QLineEdit(this);
     progPathEdit = new QLineEdit(this);
 
+    progMaxMemEdit = new QLineEdit(this);
+    progMaxTimeEdit = new QLineEdit(this);
+    QIntValidator *intValidator = new QIntValidator(this);
+    progMaxMemEdit->setValidator(intValidator);
+    progMaxTimeEdit->setValidator(intValidator);
+
     formLayout->addRow("Process name:", progNameEdit);
     formLayout->addRow("Executable path:", progPathEdit);
+
+    QHBoxLayout *hLayout = new QHBoxLayout();
+    hLayout->addWidget(new QLabel("Maximum memory:"));
+    hLayout->addWidget(progMaxMemEdit);
+    hLayout->addSpacing(20); 
+    hLayout->addWidget(new QLabel("Maximum CPU time:"));
+    hLayout->addWidget(progMaxTimeEdit);
+
+    // Add the horizontal layout to the form layout
+    formLayout->addRow(hLayout);
+
+    // Add the form layout to the main layout
     layout->addLayout(formLayout);
 
     QHBoxLayout *ruleLayout = new QHBoxLayout();
@@ -69,21 +88,23 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     resize(600, 300);
 }
 
-AddProcessDialog::AddProcessDialog(QWidget *parent, QString name, QString path, QVector<RuleInfoGui> rules) : AddProcessDialog(parent)
+AddProcessDialog::AddProcessDialog(QWidget *parent, ProcessInfo& process_info) : AddProcessDialog(parent)
 {
-    progNameEdit->setText(name);
-    progPathEdit->setText(path);
+    progNameEdit->setText(process_info.name);
+    progPathEdit->setText(process_info.path);
     progPathEdit->setEnabled(false);
-    for (int i = 0; i < rules.size(); i++)
+    progMaxTimeEdit->setText(QString::number(process_info.maxTime));
+    progMaxMemEdit->setText(QString::number(process_info.maxMem));
+    for (int i = 0; i < process_info.rules.size(); i++)
     {
         QString message = "";
-        for (const int &syscall : rules[i].syscalls)
+        for (const int &syscall : process_info.rules[i].syscalls)
         {
             message += invertedSyscallMap[syscall] + " ";
         }
         AddRuleRow(message);
-        ruleTypeSels[i]->setCurrentIndex(rules[i].restrict_all ? 0 : 1);
-        restrictPath[i]->setText(rules[i].path_info);
+        ruleTypeSels[i]->setCurrentIndex(process_info.rules[i].restrict_all ? 0 : 1);
+        restrictPath[i]->setText(process_info.rules[i].path_info);
     }
 }
 
@@ -111,6 +132,8 @@ void AddProcessDialog::TableCellDoubleClicked(int row, int column)
 
 QString AddProcessDialog::getName() const { return progNameEdit->text(); }
 QString AddProcessDialog::getProgPath() const { return progPathEdit->text(); }
+int AddProcessDialog::getMaxMem() const {return progMaxMemEdit->text().toInt();}
+int AddProcessDialog::getMaxTime() const {return progMaxTimeEdit->text().toInt();}
 QVector<RuleInfoGui> AddProcessDialog::getRules() const
 {
     QVector<RuleInfoGui> res = {};

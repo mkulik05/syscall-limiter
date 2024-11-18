@@ -7,7 +7,7 @@
 #include <QVector>
 
 class AddSyscallsW : public QDialog {
-
+Q_OBJECT
 public:
     AddSyscallsW(QWidget *parent, QStringList syscalls);
     AddSyscallsW(QWidget *parent, QStringList syscalls, QVector<QString> presented_elements);

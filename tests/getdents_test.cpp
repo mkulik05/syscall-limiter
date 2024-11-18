@@ -42,7 +42,7 @@ int main() {
             return 1;
         }
         if (nread == 0) {
-            break; // No more entries
+            break; 
         }
 
         for (bpos = 0; bpos < nread;) {

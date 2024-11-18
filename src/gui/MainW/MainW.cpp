@@ -30,6 +30,10 @@ MainW::MainW()
     resize(600, 300);
 }
 
+MainW::~MainW() {
+    delete process_manager;
+}
+
 void MainW::addElement()
 {
     AddProcessDialog dialog(this);
@@ -37,6 +41,9 @@ void MainW::addElement()
     {
         QString name = dialog.getName();
         QString path = dialog.getProgPath();
+        int maxMem = dialog.getMaxMem();
+        int maxTime = dialog.getMaxTime();
+
         QVector<RuleInfoGui> rules = dialog.getRules();
 
         pid_t pid = process_manager->addProcess(path.toStdString());
@@ -53,9 +60,13 @@ void MainW::addElement()
             rules_ids.append(id);
         }
 
+        std::string memStr = "max";
+        if (maxMem != 0) memStr = std::to_string(maxMem * 1024 * 1024);
+        process_manager->setMemTime(pid, memStr, maxTime);
+
         process_manager->startProcess(pid);
 
-        processes_info.append({pid, name, path, rules_ids, rules});
+        processes_info.append({pid, name, path, rules_ids, rules, maxMem, maxTime});
 
         int rowCount = tableWidget->rowCount();
         tableWidget->insertRow(rowCount);
@@ -74,12 +85,16 @@ void MainW::editElement(QTableWidgetItem *item)
     if (item)
     {
         int row = item->row();
-        AddProcessDialog dialog(this, processes_info[row].name, processes_info[row].path, processes_info[row].rules);
+        AddProcessDialog dialog(this, processes_info[row]);
         if (dialog.exec() == QDialog::Accepted)
         {
             QString name = dialog.getName();
             QVector<RuleInfoGui> new_rules = dialog.getRules();
+            int maxMem = dialog.getMaxMem();
+            int maxTime = dialog.getMaxTime();
+            
             tableWidget->item(row, 0)->setText(name);
+
             processes_info[row].name = name;
 
             std::vector<std::pair<Rule, std::vector<int>>> new_rules_info = {};
@@ -90,8 +105,11 @@ void MainW::editElement(QTableWidgetItem *item)
                 new_rules_info.push_back({{0, new_rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, new_rules[i].path_info.toStdString()}, syscalls});
             }
 
-            std::vector<int> old_rules_ids(processes_info[row].rules_ids.begin(), processes_info[row].rules_ids.end());
+            std::vector<int> old_rules_ids(processes_info[row].rules_ids.begin(), processes_info[row].rules_ids.end()); 
 
+            std::string memStr = "max";
+            if (maxMem != 0) memStr = std::to_string(maxMem * 1024 * 1024);
+            process_manager->setMemTime(processes_info[row].pid, memStr, maxTime);
             std::vector<int> rules_ids = process_manager->supervisor->updateRules(processes_info[row].pid, old_rules_ids, new_rules_info);
             processes_info[row].rules = new_rules;
             processes_info[row].rules_ids = QVector<int>(rules_ids.begin(), rules_ids.end());
