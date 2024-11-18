@@ -13,14 +13,13 @@ AddSyscallsW::AddSyscallsW(QWidget *parent, QStringList syscalls) : QDialog(pare
 
     QVBoxLayout *layout = new QVBoxLayout(this);
 
-    // Create a combo box
     comboBox = new QComboBox(this);
     comboBox->setEditable(true);
     comboBox->addItems(syscalls); 
     comboBox->setInsertPolicy(QComboBox::NoInsert);
+    comboBox->lineEdit()->clear();
     layout->addWidget(comboBox);
 
-    // Create a list widget
     listWidget = new QListWidget(this);
     layout->addWidget(listWidget);
 
@@ -35,8 +34,16 @@ AddSyscallsW::AddSyscallsW(QWidget *parent, QStringList syscalls) : QDialog(pare
     connect(cancelButton, &QPushButton::clicked, this, &AddSyscallsW::reject);
     connect(comboBox->lineEdit(), &QLineEdit::returnPressed, this, &AddSyscallsW::checkAndAdd);
     connect(listWidget, &QListWidget::itemDoubleClicked, this, &AddSyscallsW::removeItem);
+    connect(comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AddSyscallsW::addItemFromComboBox);
 
     setLayout(layout);
+}
+
+void AddSyscallsW::addItemFromComboBox() {
+    QString text = comboBox->currentText();
+    if (!text.isEmpty() && listWidget->findItems(text, Qt::MatchExactly).isEmpty()) {
+        listWidget->addItem(text);
+    }
 }
 
 AddSyscallsW::AddSyscallsW(QWidget *parent, QStringList syscalls, QVector<QString> presented_elements) : AddSyscallsW(parent, syscalls)  {
@@ -61,6 +68,7 @@ void AddSyscallsW::checkAndAdd() {
     }
     if (comboBox->findText(text) != -1) { 
         listWidget->addItem(text);
+        comboBox->lineEdit()->clear();
     }
 }
 

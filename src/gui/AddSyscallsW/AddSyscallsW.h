@@ -17,6 +17,7 @@ private:
     void checkAndAdd();
     void removeItem(QListWidgetItem *item);
     void keyPressEvent(QKeyEvent *event) override;
+    void addItemFromComboBox();
     
 
 private:
