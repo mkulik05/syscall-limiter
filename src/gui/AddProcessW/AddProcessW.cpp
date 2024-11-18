@@ -68,16 +68,30 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     layout->addLayout(ruleLayout);
 
     rulesTable = new QTableWidget(this);
-    rulesTable->setColumnCount(3);
-    rulesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    rulesTable->setHorizontalHeaderLabels(QStringList() << "Syscalls" << "Restrict type" << "Path");
+    rulesTable->setColumnCount(4);
+    
+    rulesTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    rulesTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    rulesTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    rulesTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    
+    rulesTable->setHorizontalHeaderLabels(QStringList() << "Syscalls" << "Restrict type" << "Path" << "");
+    rulesTable->setColumnWidth(3, 50);
     connect(rulesTable, &QTableWidget::cellDoubleClicked, this, &AddProcessDialog::TableCellDoubleClicked);
+
+    connect(rulesTable, &QTableWidget::cellClicked, [&](int row, int column) {
+        if (column == 3) {
+            qInfo() << row;
+            rulesTable->removeRow(row);
+        }
+    });
+
     layout->addWidget(rulesTable);
 
     QPushButton *saveButton = new QPushButton("Save", this);
     QPushButton *cancelButton = new QPushButton("Cancel", this);
 
-    connect(saveButton, &QPushButton::clicked, this, &AddProcessDialog::accept);
+    connect(saveButton, &QPushButton::clicked, this, &AddProcessDialog::checkAndAccept);
     connect(cancelButton, &QPushButton::clicked, this, &AddProcessDialog::reject);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
@@ -223,4 +237,19 @@ void AddProcessDialog::AddRuleRow(QString &message)
                 path_item->setText("");
             } });
     rulesTable->setCellWidget(rowCount, 2, path_item);
+
+    QTableWidgetItem *table_item = new QTableWidgetItem("X");
+    table_item->setForeground(Qt::red);
+    table_item->setFlags(Qt::ItemIsEnabled); 
+
+    rulesTable->setItem(rowCount, 3, table_item);
+}
+
+
+void AddProcessDialog::checkAndAccept() {
+    if (progPathEdit->text().isEmpty()) {
+        QMessageBox::warning(this, "Warning", "Please enter a path to executable");
+    } else {
+        accept(); 
+    }
 }

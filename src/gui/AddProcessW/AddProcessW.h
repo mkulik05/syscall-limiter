@@ -36,6 +36,8 @@ public:
     int getMaxMem() const;
     int getMaxTime() const;
 
+private slots:
+    void checkAndAccept();
    
 private:
     void TableCellDoubleClicked(int row, int column);
