@@ -26,10 +26,11 @@ class ProcessManager {
         void startProcess(pid_t pid);
         int setMemTime(pid_t pid, std::string maxMem, int maxTime);
 
+        std::vector<pid_t> startedPIDs;
         Supervisor* supervisor;
+        bool is_process_running(pid_t pid);
         
     private:
-        // TODO: add started process pid returning
         void process_starter();
         void start_supervisor(pid_t starter_pid);
 
@@ -37,9 +38,6 @@ class ProcessManager {
         
         SocketBridge* fd_bridge;
         SocketBridge* started_pids_bridge;
-
-
-        std::vector<pid_t> startedPIDs;
 
         std::thread thread_supervisor, thread_process_starter;
 

@@ -51,7 +51,7 @@ ProcessManager::~ProcessManager() {
 
 ProcessManager::ProcessManager()
 {   
-    Logger::getInstance().setVerbosity(Logger::Verbosity::INFO);
+    Logger::getInstance().setVerbosity(Logger::Verbosity::DEBUG);
     this->cgroup_path = getCgroupMountPoint();
     this->map_cgroup = {};
     this->startedPIDs = std::vector<pid_t>();
@@ -150,32 +150,38 @@ int ProcessManager::setMemTime(pid_t pid, std::string maxMem, int maxTime) {
         return -1;
     }
 
+    if(writeToFile(path + "/memory.swap.max", "0") == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup memory.swap.max: %s", strerror(errno));
+        return -1;
+    }
+
     return 0;
 }
 
-bool is_process_suspended(pid_t pid) {
-    Logger::getInstance().log(Logger::Verbosity::INFO, "\n\nlala-%d-=-=-=-=-=-=-=-=%d-=-=-=-=-=-=-=-=\n\n", pid, getpid());
-    std::ifstream status_file("/proc/" + std::to_string(pid) + "/status");
+#include <fstream>
+#include <sstream>
+#include <string>
+
+bool is_process_zombie(pid_t pid) {
+    std::ifstream stat_file("/proc/" + std::to_string(pid) + "/stat");
     std::string line;
 
-    if (!status_file.is_open()) {
-        Logger::getInstance().log(Logger::Verbosity::WARNING, "\nCase1: Unable to open status file for PID %d", pid);
+    if (!stat_file.is_open()) {
         return false;
     }
-    status_file.sync();
-    while (std::getline(status_file, line)) {
-        if (line.find("State:") != std::string::npos) {
-            status_file.sync();
-            Logger::getInstance().log(Logger::Verbosity::INFO, "\n\n\n%s\n\n\n", line.c_str());
-            if ((line.find("T (stopped)") != std::string::npos) || (line.find("S (sleeping)") != std::string::npos)) {
-                return true;
-            } else {
-                Logger::getInstance().log(Logger::Verbosity::WARNING, "\nCase2: Process %d is not suspended: %s\n\n", pid, line.c_str());
-                return false;
+
+    if (std::getline(stat_file, line)) {
+        std::istringstream iss(line);
+        std::string token;
+        int field_index = 0;
+
+        while (iss >> token) {
+            if (field_index == 2) { 
+                return (token == "Z"); 
             }
+            field_index++;
         }
     }
-    Logger::getInstance().log(Logger::Verbosity::WARNING, "\nCase3: Process state not found for PID %d\n", pid);
     return false;
 }
 
@@ -235,6 +241,10 @@ void ProcessManager::start_supervisor(pid_t starter_pid) {
 
 
     this->supervisor->run(notifyFd);
+}
+
+bool ProcessManager::is_process_running(pid_t pid) {
+    return (kill(pid, 0) == 0) && (!is_process_zombie(pid));
 }
 
 void ProcessManager::process_starter() {
@@ -315,10 +325,9 @@ void ProcessManager::process_starter() {
         } else {
             // Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process before stopping");
             kill(getpid(), SIGSTOP);
-            // Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process resumed");
+            Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process resumed");
             execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process finished");
-            for(;;){}
             exit(EXIT_SUCCESS);
         }
     }

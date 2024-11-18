@@ -1,7 +1,10 @@
 #include "MainW.h"
 #include <QMessageBox>
+#include <QTimer>
 #include "../AddProcessW/AddProcessW.h"
 #include "../../logic/rules/rules.h"
+
+
 
 MainW::MainW()
 {
@@ -28,6 +31,36 @@ MainW::MainW()
     connect(tableWidget, &QTableWidget::itemDoubleClicked, this, &MainW::editElement);
 
     resize(600, 300);
+
+
+
+    QTimer* timer = new QTimer();
+    timer->setInterval(500);
+    connect(timer, &QTimer::timeout, this, [=]() {
+        for (int i = 0; i < process_manager->startedPIDs.size(); i++) {
+            int pid = process_manager->startedPIDs[i];
+            bool res = process_manager->is_process_running(pid);
+            if (!res) {
+                auto result = std::find_if(processes_info.begin(), processes_info.end(), [pid](ProcessInfo pi) {
+                    return pi.pid == pid;
+                });
+
+                if (result != processes_info.end()) {
+                    int i = (result - processes_info.begin());
+                    QTableWidgetItem *item = tableWidget->item(i, 2);
+                    if (item) {
+                        item->setText("Finished");
+                    } else {
+                        qWarning() << "Item at row" << i << "is null";
+                    }
+                }
+                
+                process_manager->startedPIDs.erase(process_manager->startedPIDs.begin() + i);
+                i--;
+            }
+        }
+    });
+    timer->start();
 }
 
 MainW::~MainW() {

@@ -20,7 +20,6 @@ func main() {
   runtime.GOMAXPROCS(numCPU)
 
   const memChunkMB = 1
-  var chunks [][]byte
   go func() {
     wg.Add(1)
     defer wg.Done()
@@ -30,10 +29,8 @@ func main() {
       for i := 0; i < len(chunk); i++ {
         chunk[i] = byte(i % 256)
       }
-      chunks = append(chunks, chunk)
-
       fmt.Printf("Allocated %d MB of memory\n", memChunkMB)
-      time.Sleep(1 * time.Second)
+      time.Sleep(10 * time.Millisecond)
     }
   }()
 
