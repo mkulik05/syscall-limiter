@@ -312,6 +312,18 @@ void ProcessManager::process_starter() {
         std::string command = message.msg_text;
 
         Logger::getInstance().log(Logger::Verbosity::INFO, "Command: '%s'", command.substr(0, n).c_str());
+        
+        const char* stdoutFile = "output.txt";
+        const char* stderrFile = "error.txt";
+
+        // Create and open the files
+        int stdoutFd = open(stdoutFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int stderrFd = open(stderrFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+        if (stdoutFd < 0 || stderrFd < 0) {
+            std::cerr << "Error opening files for redirection." << std::endl;
+            return;
+        }
         pid_t targetPid = fork();
         if (targetPid == -1) {
             Logger::getInstance().log(Logger::Verbosity::ERROR, "fork error: %s", strerror(errno));
@@ -322,8 +334,15 @@ void ProcessManager::process_starter() {
                 Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to send started process descriptor: %s", strerror(errno));
             }
             Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: process started with PID: %d", targetPid);
+            close(stdoutFd);
+            close(stderrFd);
         } else {
-            // Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process before stopping");
+            dup2(stdoutFd, STDOUT_FILENO);
+            dup2(stderrFd, STDERR_FILENO);
+
+            close(stdoutFd);
+            close(stderrFd);
+
             kill(getpid(), SIGSTOP);
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process resumed");
             execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
