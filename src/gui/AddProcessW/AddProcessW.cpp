@@ -237,6 +237,7 @@ void AddProcessDialog::AddRuleRow(QString &message)
     rulesTable->setCellWidget(rowCount, 2, path_item);
 
     QTableWidgetItem *table_item = new QTableWidgetItem("X");
+    table_item->setTextAlignment(Qt::AlignCenter);
     table_item->setForeground(Qt::red);
     table_item->setFlags(Qt::ItemIsEnabled); 
 

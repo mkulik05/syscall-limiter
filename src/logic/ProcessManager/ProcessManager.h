@@ -25,9 +25,11 @@ class ProcessManager {
         pid_t addProcess(std::string cmd, std::string log_path);
         void startProcess(pid_t pid);
         int setMemTime(pid_t pid, std::string maxMem, int maxTime);
+        void stopProcess(pid_t pid);
 
         std::vector<pid_t> startedPIDs;
         Supervisor* supervisor;
+
         bool is_process_running(pid_t pid);
         
     private:

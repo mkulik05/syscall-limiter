@@ -17,4 +17,5 @@ struct ProcessInfo {
     int maxMem;
     int maxTime;
     std::string log_path;
+    bool is_running;
 };

@@ -45,7 +45,7 @@ extern const char *program_pathname;
 std::string getCgroupMountPoint();
 
 ProcessManager::~ProcessManager() {
-    broadcast_signal(SIGKILL);
+    broadcast_signal(SIGTERM);
     this->thread_supervisor.~thread();
     delete this->started_pids_bridge;
     delete this->fd_bridge;
@@ -205,6 +205,10 @@ void ProcessManager::broadcast_signal(int sygn_n) {
         kill(this->startedPIDs[i], sygn_n);
     }
     kill(this->supervisor->pid, sygn_n);
+}
+
+void ProcessManager::stopProcess(pid_t pid) {
+    kill(pid, SIGTERM);
 }
 
 
