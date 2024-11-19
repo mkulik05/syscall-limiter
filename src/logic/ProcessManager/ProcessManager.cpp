@@ -296,8 +296,6 @@ void ProcessManager::process_starter() {
         int stdoutFd = open((task.str2 + ".out").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         int stderrFd = open((task.str2 + ".err").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-        qInfo() << stdoutFd << " " << stderrFd;
-
         if (stdoutFd < 0 || stderrFd < 0) {
             std::cerr << "Error opening files for redirection." << std::endl;
             return;

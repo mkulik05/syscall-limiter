@@ -53,10 +53,8 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     hLayout->addWidget(new QLabel("Maximum CPU time:"));
     hLayout->addWidget(progMaxTimeEdit);
 
-    // Add the horizontal layout to the form layout
     formLayout->addRow(hLayout);
 
-    // Add the form layout to the main layout
     layout->addLayout(formLayout);
 
     QHBoxLayout *ruleLayout = new QHBoxLayout();

@@ -20,6 +20,7 @@ set(SRC_FILES
     src/logic/Supervisor/Manager/Supervisor.cpp
     src/logic/Logger/Logger.cpp
     src/gui/AddProcessW/AddProcessW.cpp 
+    src/gui/ProcOutputW/ProcOutputW.cpp
     src/gui/AddSyscallsW/AddSyscallsW.cpp 
     src/gui/MainW/MainW.cpp
 )
@@ -32,6 +33,7 @@ set(HEADER_FILES
     src/logic/Supervisor/handlers/handlers.h
     src/logic/rules/rules.h
     src/logic/Logger/Logger.h
+    src/gui/ProcOutputW/ProcOutputW.h
     src/gui/AddProcessW/AddProcessW.h
     src/gui/AddSyscallsW/AddSyscallsW.h 
     src/gui/MainW/MainW.h

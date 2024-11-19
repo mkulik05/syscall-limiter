@@ -7,6 +7,7 @@
 #include "../AddProcessW/AddProcessW.h"
 #include "../../logic/rules/rules.h"
 #include "../../logic/Logger/Logger.h"
+#include "../ProcOutputW/ProcOutputW.h"
 
 MainW::MainW()
 {
@@ -19,8 +20,11 @@ MainW::MainW()
     QVBoxLayout *layout = new QVBoxLayout(this);
 
     tableWidget = new QTableWidget(this);
-    tableWidget->setColumnCount(3);
-    tableWidget->setHorizontalHeaderLabels(QStringList() << "Process name" << "PID" << "Status");
+    tableWidget->setColumnCount(5);
+    tableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    tableWidget->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    tableWidget->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
+    tableWidget->setHorizontalHeaderLabels(QStringList() << "Process name" << "PID" << "Status" << "Logs" << "");
 
     tableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
@@ -31,10 +35,14 @@ MainW::MainW()
 
     connect(addButton, &QPushButton::clicked, this, &MainW::addElement);
     connect(tableWidget, &QTableWidget::itemDoubleClicked, this, &MainW::editElement);
+    connect(tableWidget, &QTableWidget::cellClicked, [&](int row, int column) {
+        if (column == 3) {
+            ProcOutputDialog dialog(processes_info[row].name, processes_info[row].log_path, nullptr);
+            dialog.exec();
+        }
+    });
 
     resize(600, 300);
-
-
 
     QTimer* timer = new QTimer();
     timer->setInterval(500);
@@ -120,9 +128,12 @@ void MainW::addElement()
         tableWidget->setItem(rowCount, 1, new QTableWidgetItem(QString::number(pid)));
         tableWidget->setItem(rowCount, 2, new QTableWidgetItem("Running"));
 
-        tableWidget->item(rowCount, 0)->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+        QTableWidgetItem *table_item = new QTableWidgetItem("X");
+        table_item->setForeground(Qt::red);
+        table_item->setFlags(Qt::ItemIsEnabled); 
+        tableWidget->setItem(rowCount, 4, table_item);
+
         tableWidget->item(rowCount, 1)->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
-        tableWidget->item(rowCount, 2)->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
     }
 }
 
