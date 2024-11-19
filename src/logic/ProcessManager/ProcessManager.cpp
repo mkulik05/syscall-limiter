@@ -31,6 +31,8 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <sys/resource.h>
+#include <fstream>
+#include <sstream>
 
 #include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
@@ -47,6 +49,12 @@ ProcessManager::~ProcessManager() {
     this->thread_supervisor.~thread();
     delete this->started_pids_bridge;
     delete this->fd_bridge;
+    for (const auto& pair : map_cgroup) {
+        int res = rmdir(pair.second.c_str());
+        if (res != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to remove cgroup: %s", strerror(errno));
+        } 
+    }
 }
 
 ProcessManager::ProcessManager()
@@ -56,6 +64,7 @@ ProcessManager::ProcessManager()
     this->map_cgroup = {};
     this->startedPIDs = std::vector<pid_t>();
     this->fd_bridge = new SocketBridge();
+    this->task_bridge = new SocketBridge();
     this->started_pids_bridge = new SocketBridge();
 
 
@@ -158,9 +167,7 @@ int ProcessManager::setMemTime(pid_t pid, std::string maxMem, int maxTime) {
     return 0;
 }
 
-#include <fstream>
-#include <sstream>
-#include <string>
+
 
 bool is_process_zombie(pid_t pid) {
     std::ifstream stat_file("/proc/" + std::to_string(pid) + "/stat");
@@ -201,25 +208,11 @@ void ProcessManager::broadcast_signal(int sygn_n) {
 }
 
 
-pid_t ProcessManager::addProcess(std::string cmd) {
-    key_t key = ftok(program_pathname, START_PROCESS_IPC_VALUE);
-    if (key == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "ftok error: %s", strerror(errno));
-        return -1;
-    }
-    
-    int msgid = msgget(key, 0666 | IPC_CREAT);
-
-    if (msgid == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "msgget error: %s", strerror(errno));
-        return -1;
-    }
-    struct msg_buffer message;
-    message.msg_type = 1;
-    strncpy(message.msg_text, cmd.c_str(), sizeof(message.msg_text));
-    // this->start_process_msg_type += 1;
-    if (msgsnd(msgid, &message, cmd.length(), 0) == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "msgsnd error: %s", strerror(errno));
+pid_t ProcessManager::addProcess(std::string cmd, std::string log_path) {
+    Strings buf = {cmd, log_path};
+    int r = this->task_bridge->send_strings(buf);
+    if (r != 0) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to send task: %s", strerror(errno));
         return -1;
     }
     Logger::getInstance().log(Logger::Verbosity::INFO, "Adding process: before receiving new proc fd");
@@ -247,6 +240,8 @@ bool ProcessManager::is_process_running(pid_t pid) {
     return (kill(pid, 0) == 0) && (!is_process_zombie(pid));
 }
 
+
+#include <QDebug>
 void ProcessManager::process_starter() {
 
     struct stat info;
@@ -272,18 +267,6 @@ void ProcessManager::process_starter() {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter prctl error: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    Logger::getInstance().log(Logger::Verbosity::INFO, "ftok file key: %s", program_pathname);
-    key_t key = ftok(program_pathname, START_PROCESS_IPC_VALUE);
-    if (key == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter ftok error: %s", strerror(errno));
-        return;
-    }
-    int msgid = msgget(key, 0666 | IPC_CREAT);
-    if (msgid == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter msgget error: %s", strerror(errno));
-        return;
-    }
-
     Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: starting seccomp filter installation");
     int notifyFd = installNotifyFilter();
 
@@ -299,26 +282,21 @@ void ProcessManager::process_starter() {
     //     exit(EXIT_FAILURE);
     // }
 
-    struct msg_buffer message;
-
     for (;;) {
         Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: waiting for command to start");
-        size_t n = msgrcv(msgid, &message, sizeof(message.msg_text), 1, 0);
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: got command");
-        if (n == -1) {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Process starter: msgrcv error: %s", strerror(errno));
-            return;
+
+        Strings task;
+        int res = this->task_bridge->recv_strings(task);
+        if (res == -1) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Faield to recv task to start: %s", strerror(errno));
+            continue;
         }
-        std::string command = message.msg_text;
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Command: '%s'\tLog path: %s", task.str1.c_str(), task.str2.c_str());
 
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Command: '%s'", command.substr(0, n).c_str());
-        
-        const char* stdoutFile = "output.txt";
-        const char* stderrFile = "error.txt";
+        int stdoutFd = open((task.str2 + ".out").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int stderrFd = open((task.str2 + ".err").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-        // Create and open the files
-        int stdoutFd = open(stdoutFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        int stderrFd = open(stderrFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        qInfo() << stdoutFd << " " << stderrFd;
 
         if (stdoutFd < 0 || stderrFd < 0) {
             std::cerr << "Error opening files for redirection." << std::endl;
@@ -345,7 +323,7 @@ void ProcessManager::process_starter() {
 
             kill(getpid(), SIGSTOP);
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process resumed");
-            execl("/bin/sh", "sh", "-c", command.substr(0, n).c_str(), (char *) NULL);
+            execl("/bin/sh", "sh", "-c", task.str1.c_str(), (char *) NULL);
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Started process finished");
             exit(EXIT_SUCCESS);
         }

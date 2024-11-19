@@ -1,10 +1,12 @@
 #include "MainW.h"
 #include <QMessageBox>
 #include <QTimer>
+#include <chrono>
+#include <unistd.h>
+
 #include "../AddProcessW/AddProcessW.h"
 #include "../../logic/rules/rules.h"
-
-
+#include "../../logic/Logger/Logger.h"
 
 MainW::MainW()
 {
@@ -64,6 +66,14 @@ MainW::MainW()
 }
 
 MainW::~MainW() {
+    for (int i = 0; i < processes_info.size(); i++) {
+        if (unlink((processes_info[i].log_path + ".err").c_str()) != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to delete stderr log: %s", strerror(errno));
+        }
+        if (unlink((processes_info[i].log_path + ".out").c_str()) != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to delete stdout log: %s", strerror(errno));
+        }
+    }
     delete process_manager;
 }
 
@@ -79,7 +89,10 @@ void MainW::addElement()
 
         QVector<RuleInfoGui> rules = dialog.getRules();
 
-        pid_t pid = process_manager->addProcess(path.toStdString());
+        auto now = std::chrono::system_clock::now();
+        std::time_t unix_time = std::chrono::system_clock::to_time_t(now);
+        std::string logPath = "/tmp/" + std::to_string(unix_time);
+        pid_t pid = process_manager->addProcess(path.toStdString(), logPath);
         if (pid == -1) {
             QMessageBox::warning(this, "Unexpected error occurred", "Process have not started successfully", QMessageBox::Ok);
             return;
@@ -99,7 +112,7 @@ void MainW::addElement()
 
         process_manager->startProcess(pid);
 
-        processes_info.append({pid, name, path, rules_ids, rules, maxMem, maxTime});
+        processes_info.append({pid, name, path, rules_ids, rules, maxMem, maxTime, logPath});
 
         int rowCount = tableWidget->rowCount();
         tableWidget->insertRow(rowCount);

@@ -164,3 +164,57 @@ int SocketBridge::recv_fd() {
     memcpy(&fd, CMSG_DATA(cmsgp), sizeof(int));
     return fd;
 }
+
+int SocketBridge::send_strings(const Strings& strings) {
+    size_t len1 = strings.str1.size();
+    if (send(sockPair[0], &len1, sizeof(len1), 0) == -1) {
+        perror("send str1 length");
+        return -1;
+    }
+
+    if (send(sockPair[0], strings.str1.c_str(), len1, 0) == -1) {
+        perror("send str1 data");
+        return -1;
+    }
+
+    size_t len2 = strings.str2.size();
+    if (send(sockPair[0], &len2, sizeof(len2), 0) == -1) {
+        perror("send str2 length");
+        return -1;
+    }
+
+    if (send(sockPair[0], strings.str2.c_str(), len2, 0) == -1) {
+        perror("send str2 data");
+        return -1;
+    }
+
+    return 0;
+}
+
+int SocketBridge::recv_strings(Strings& strings) {
+    size_t len1;
+    if (recv(sockPair[1], &len1, sizeof(len1), 0) == -1) {
+        perror("recv str1 length");
+        return -1;
+    }
+
+    strings.str1.resize(len1);
+    if (recv(sockPair[1], &strings.str1[0], len1, 0) == -1) {
+        perror("recv str1 data");
+        return -1;
+    }
+
+    size_t len2;
+    if (recv(sockPair[1], &len2, sizeof(len2), 0) == -1) {
+        perror("recv str2 length");
+        return -1;
+    }
+
+    strings.str2.resize(len2);
+    if (recv(sockPair[1], &strings.str2[0], len2, 0) == -1) {
+        perror("recv str2 data");
+        return -1;
+    }
+
+    return 0;
+}

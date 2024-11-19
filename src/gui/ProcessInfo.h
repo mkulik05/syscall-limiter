@@ -16,4 +16,5 @@ struct ProcessInfo {
     QVector<RuleInfoGui> rules;
     int maxMem;
     int maxTime;
+    std::string log_path;
 };

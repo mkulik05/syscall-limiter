@@ -22,7 +22,7 @@ class ProcessManager {
         ProcessManager();
         ~ProcessManager();
         void broadcast_signal(int sig_n);
-        pid_t addProcess(std::string cmd);
+        pid_t addProcess(std::string cmd, std::string log_path);
         void startProcess(pid_t pid);
         int setMemTime(pid_t pid, std::string maxMem, int maxTime);
 
@@ -37,6 +37,7 @@ class ProcessManager {
         pid_t process_starter_pid;
         
         SocketBridge* fd_bridge;
+        SocketBridge* task_bridge;
         SocketBridge* started_pids_bridge;
 
         std::thread thread_supervisor, thread_process_starter;
