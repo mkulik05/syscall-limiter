@@ -83,6 +83,8 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     connect(addRuleButton, &QPushButton::clicked, this, &AddProcessDialog::addRule);
     layout->addWidget(addRuleButton);
     
+    layout->addSpacing(10);
+
     rulesTable = new QTableWidget(this);
     rulesTable->setColumnCount(4);
     
@@ -240,6 +242,7 @@ void AddProcessDialog::AddRuleRow(QString &message)
     QComboBox *ruleTypeSel = new QComboBox(this);
     ruleTypeSel->addItem("Any");
     ruleTypeSel->addItem("Path");
+    ruleTypeSel->setStyleSheet("background: transparent; border: none; padding-left: 5px;");
     this->ruleTypeSels.push_back(ruleTypeSel);
 
     int rowCount = rulesTable->rowCount();
@@ -247,15 +250,17 @@ void AddProcessDialog::AddRuleRow(QString &message)
     rulesTable->insertRow(rowCount);
 
     QScrollArea *scroll_area = new QScrollArea();
-    QLabel *item = new QLabel(message);
+    QLabel *syscallsLabel = new QLabel(message);
 
-    scroll_area->setWidget(item);
+    syscallsLabel->setStyleSheet("padding-left: 5px;");
+
+    scroll_area->setWidget(syscallsLabel);
     scroll_area->setWidgetResizable(true);
     scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    item->setWordWrap(true);
-    syscallsSels.push_back(item);
+    syscallsLabel->setWordWrap(true);
+    syscallsSels.push_back(syscallsLabel);
 
     rulesTable->setCellWidget(rowCount, 0, scroll_area);
     rulesTable->setCellWidget(rowCount, 1, ruleTypeSel);
