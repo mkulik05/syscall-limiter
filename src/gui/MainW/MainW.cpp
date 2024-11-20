@@ -1,5 +1,6 @@
 #include "MainW.h"
 #include <QMessageBox>
+#include <QCloseEvent>
 #include <QTimer>
 #include <chrono>
 #include <unistd.h>
@@ -11,9 +12,9 @@
 
 MainW::MainW()
 {
-
     process_manager = new ProcessManager();
 
+    running_n = 0;
     processes_info = {};
     setWindowTitle("Element List");
 
@@ -44,6 +45,7 @@ MainW::MainW()
             if (processes_info[row].is_running) {
                 int res = QMessageBox::question(this, "Process is currently running!!!", "Are you sure you want to terminate this process?", QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
                 if (res == QMessageBox::Yes) {
+                    running_n--;
                     process_manager->stopProcess(processes_info[row].pid);
                     tableWidget->removeRow(row);
                     processes_info.erase(processes_info.begin() + row);
@@ -72,6 +74,7 @@ MainW::MainW()
                     int i = (result - processes_info.begin());
                     QTableWidgetItem *item = tableWidget->item(i, 2);
                     processes_info[i].is_running = false;
+                    running_n--;
                     if (item) {
                         item->setText("Finished");
                     } else {
@@ -162,6 +165,8 @@ void MainW::addElement()
         tableWidget->item(rowCount, 2)->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         tableWidget->item(rowCount, 3)->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         tableWidget->item(rowCount, 4)->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+
+        running_n++;
     }
 }
 
@@ -200,5 +205,21 @@ void MainW::editElement(QTableWidgetItem *item)
             processes_info[row].rules = new_rules;
             processes_info[row].rules_ids = QVector<int>(rules_ids.begin(), rules_ids.end());
         }
+    }
+}
+
+void MainW::closeEvent(QCloseEvent *event) {
+    if (running_n <= 0) {
+        event->accept();
+        return;
+    }
+    int reply = QMessageBox::question(this, "Confirm Exit", 
+        "Are you sure you want to exit?\nThis will terminate all running processes",
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+    if (reply == QMessageBox::Yes) {
+        event->accept();
+    } else {
+        event->ignore();
     }
 }

@@ -55,25 +55,34 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
         }
     });
 
-    QHBoxLayout *hLayout = new QHBoxLayout();
-    hLayout->addWidget(new QLabel("Maximum memory:"));
-    hLayout->addWidget(progMaxMemEdit);
-    hLayout->addSpacing(20); 
-    hLayout->addWidget(new QLabel("Maximum CPU time:"));
-    hLayout->addWidget(progMaxTimeEdit);
-
-    formLayout->addRow(hLayout);
-
     layout->addLayout(formLayout);
 
-    QHBoxLayout *ruleLayout = new QHBoxLayout();
-    QPushButton *addRuleButton = new QPushButton("Add Rule", this);
+    layout->addSpacing(12);
+    QFrame *sep = new QFrame();
+    sep->setFrameShape(QFrame::HLine);
+    sep->setFrameShadow(QFrame::Sunken);
+    layout->addWidget(sep);
+    layout->addSpacing(8);
 
+    QHBoxLayout *hLayout = new QHBoxLayout();
+    QVBoxLayout *vLayout1 = new QVBoxLayout();
+    QVBoxLayout *vLayout2 = new QVBoxLayout();
+    vLayout1->addWidget(new QLabel("Maximum memory:"));
+    vLayout1->addWidget(progMaxMemEdit);
+    hLayout->addLayout(vLayout1);
+    hLayout->addSpacing(20); 
+    vLayout2->addWidget(new QLabel("Maximum CPU time:"));
+    vLayout2->addWidget(progMaxTimeEdit);
+    hLayout->addLayout(vLayout2);
+
+    layout->addLayout(hLayout);
+
+    layout->addSpacing(20);
+
+    QPushButton *addRuleButton = new QPushButton("Add Rule", this);    
     connect(addRuleButton, &QPushButton::clicked, this, &AddProcessDialog::addRule);
-
-    ruleLayout->addWidget(addRuleButton);
-    layout->addLayout(ruleLayout);
-
+    layout->addWidget(addRuleButton);
+    
     rulesTable = new QTableWidget(this);
     rulesTable->setColumnCount(4);
     
@@ -97,6 +106,20 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 
     layout->addWidget(rulesTable);
 
+
+    // QHBoxLayout *rulesetLayout = new QHBoxLayout();
+    // QPushButton *saveSetButton = new QPushButton("Save ruleset", this);    
+    // // connect(addRuleButton, &QPushButton::clicked, this, &AddProcessDialog::addRule);
+    // QComboBox *ruleSetSel = new QComboBox(this);
+
+    // rulesetLayout->addWidget(saveSetButton);
+    // rulesetLayout->addSpacing(20);
+    // rulesetLayout->addWidget(ruleSetSel);
+
+    // layout->addLayout(rulesetLayout);
+
+    // layout->addSpacing(30);
+
     QPushButton *saveButton = new QPushButton("Save", this);
     QPushButton *cancelButton = new QPushButton("Cancel", this);
 
@@ -108,7 +131,7 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
 
-    resize(600, 300);
+    resize(600, 600);
 }
 
 AddProcessDialog::AddProcessDialog(QWidget *parent, ProcessInfo& process_info) : AddProcessDialog(parent)

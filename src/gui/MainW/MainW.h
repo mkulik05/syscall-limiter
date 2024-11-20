@@ -22,7 +22,11 @@ public:
     MainW();
     ~MainW();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private:
+    int running_n;
     ProcessManager *process_manager;
     QTableWidget *tableWidget;
     QVector<ProcessInfo> processes_info;
