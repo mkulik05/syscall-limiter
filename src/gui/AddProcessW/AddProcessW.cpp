@@ -23,6 +23,8 @@ extern std::unordered_map<QString, int> syscallMap;
 extern std::unordered_map<int, QString> invertedSyscallMap;
 extern std::unordered_map<QString, QStringList> groups;
 
+QString INP_ERROR_STYLES = "background-color: #ffcccc;";
+
 AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 {
     setWindowTitle("Process Manager");
@@ -45,6 +47,13 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 
     formLayout->addRow("Process name:", progNameEdit);
     formLayout->addRow("Executable path:", progPathEdit);
+    connect(progPathEdit, &QLineEdit::textChanged, this, [=](const QString &val) {
+        if (val.isEmpty()) {
+            progPathEdit->setStyleSheet(INP_ERROR_STYLES);
+        } else {
+            progPathEdit->setStyleSheet("");
+        }
+    });
 
     QHBoxLayout *hLayout = new QHBoxLayout();
     hLayout->addWidget(new QLabel("Maximum memory:"));
@@ -79,7 +88,9 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 
     connect(rulesTable, &QTableWidget::cellClicked, [&](int row, int column) {
         if (column == 3) {
-            qInfo() << row;
+            syscallsSels.erase(syscallsSels.begin() + row);
+            ruleTypeSels.erase(ruleTypeSels.begin() + row);
+            restrictPath.erase(restrictPath.begin() + row);
             rulesTable->removeRow(row);
         }
     });
@@ -137,8 +148,12 @@ void AddProcessDialog::TableCellDoubleClicked(int row, int column)
         {
             message += selection + " ";
         }
-        qInfo() << message << "\n";
         syscallsSels[row]->setText(message);
+        if (selections.size() != 0) {
+            syscallsSels[row]->setStyleSheet("");
+        } else {
+            syscallsSels[row]->setStyleSheet(INP_ERROR_STYLES);
+        }
     }
 }
 
@@ -146,6 +161,7 @@ QString AddProcessDialog::getName() const { return progNameEdit->text(); }
 QString AddProcessDialog::getProgPath() const { return progPathEdit->text(); }
 int AddProcessDialog::getMaxMem() const {return progMaxMemEdit->text().toInt();}
 int AddProcessDialog::getMaxTime() const {return progMaxTimeEdit->text().toInt();}
+
 QVector<RuleInfoGui> AddProcessDialog::getRules() const
 {
     QVector<RuleInfoGui> res = {};
@@ -158,8 +174,7 @@ QVector<RuleInfoGui> AddProcessDialog::getRules() const
         for (int i = 0; i < words.size(); i++)
         {
             // check is it a group
-            if (syscallMap.count(words[i]) == 0) {
-                qInfo() << words[i] << "\n"; 
+            if (syscallMap.count(words[i]) == 0) { 
                 for (int j = 0; j < groups[words[i]].size(); j++) {
                     res_syscalls.insert(syscallMap[groups[words[i]][j]]);
                 }
@@ -193,7 +208,6 @@ void AddProcessDialog::addRule()
         {
             message += selection + " ";
         }
-
         AddRuleRow(message);
     }
 }
@@ -231,10 +245,19 @@ void AddProcessDialog::AddRuleRow(QString &message)
             if (index == 1) { // If "Path" is selected
                 path_item->setEnabled(true); 
             } else {
+                path_item->setStyleSheet("");
                 path_item->setEnabled(false);
                 path_item->setText("");
             } });
     rulesTable->setCellWidget(rowCount, 2, path_item);
+
+    connect(path_item, &QLineEdit::textChanged, this, [=](const QString &val) {
+        if ((ruleTypeSel->currentIndex() == 1) && val.isEmpty()) {
+            path_item->setStyleSheet(INP_ERROR_STYLES);
+        } else {
+            path_item->setStyleSheet("");
+        }
+    });
 
     QTableWidgetItem *table_item = new QTableWidgetItem("X");
     table_item->setTextAlignment(Qt::AlignCenter);
@@ -244,11 +267,29 @@ void AddProcessDialog::AddRuleRow(QString &message)
     rulesTable->setItem(rowCount, 3, table_item);
 }
 
-
 void AddProcessDialog::checkAndAccept() {
+    bool valid = true;
+
     if (progPathEdit->text().isEmpty()) {
-        QMessageBox::warning(this, "Warning", "Please enter a path to executable");
+        progPathEdit->setStyleSheet(INP_ERROR_STYLES); 
+        valid = false;
+    }
+
+    for (int i = 0; i < rulesTable->rowCount(); i++) {
+        if (ruleTypeSels[i]->currentIndex() == 1 && restrictPath[i]->text().isEmpty()) {
+            restrictPath[i]->setStyleSheet(INP_ERROR_STYLES); 
+            valid = false;
+        }
+
+        if (syscallsSels[i]->text().isEmpty()) {
+            syscallsSels[i]->setStyleSheet(INP_ERROR_STYLES); 
+            valid = false;
+        }
+    }
+
+    if (!valid) {
+        QMessageBox::warning(this, "Warning", "Please fill in the highlighted fields.");
     } else {
-        accept(); 
+        accept();
     }
 }

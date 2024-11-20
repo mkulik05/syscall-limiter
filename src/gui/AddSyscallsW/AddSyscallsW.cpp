@@ -55,7 +55,6 @@ AddSyscallsW::AddSyscallsW(QWidget *parent, QStringList syscalls, QVector<QStrin
 QVector<QString> AddSyscallsW::getSelections() const {
     QVector<QString> selections;
     for (int i = 0; i < listWidget->count(); ++i) {
-        qInfo() << (listWidget->item(i)->text()) << " ";
         selections.append(listWidget->item(i)->text());
     }
     return selections;
