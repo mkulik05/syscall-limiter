@@ -16,8 +16,9 @@
 #include <QTextEdit>
 #include <QVector>
 #include <QString>
+#include <unordered_map>
 
-
+#include "configs/configs.h"
 #include "../ProcessInfo.h"
 
 class AddProcessDialog : public QDialog {
@@ -28,7 +29,7 @@ public:
 
     void addRule();
 
-    void AddRuleRow(QString &message);
+    int AddRuleRow(QString &message);
 
     QString getName() const;
     QString getProgPath() const;
@@ -38,9 +39,14 @@ public:
 
 private slots:
     void checkAndAccept();
+    
+    void menuAddRule();
+    void menuSaveRules();
+    void menuImportRule(const std::string &ruleName);
    
 private:
     void TableCellDoubleClicked(int row, int column);
+    QMenu *importMenu;
     QLineEdit *progNameEdit;
     QLineEdit *progPathEdit;
     
@@ -48,7 +54,9 @@ private:
     QLineEdit *progMaxTimeEdit;
     std::vector<QLabel*> syscallsSels;      
     std::vector<QComboBox*> ruleTypeSels; 
-    std::vector<QLineEdit*> restrictPath; 
+    std::vector<QLineEdit*> restrictPathes; 
     QTableWidget *rulesTable;
-    QStringList elements;             
+    QStringList elements;    
+
+    std::unordered_map<std::string, ConfigRules> all_rulesets;         
 };

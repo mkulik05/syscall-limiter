@@ -4,3 +4,4 @@ test_folder
 tempdir
 build
 a.out
+.cache

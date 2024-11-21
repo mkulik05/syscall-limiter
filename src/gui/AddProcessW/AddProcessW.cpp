@@ -15,6 +15,8 @@
 #include <set>
 #include <sys/syscall.h>
 #include <QIntValidator>
+#include <QMenu>
+#include <QMenuBar>
 
 #include "../AddSyscallsW/AddSyscallsW.h"
 
@@ -25,15 +27,44 @@ extern std::unordered_map<QString, QStringList> groups;
 
 QString INP_ERROR_STYLES = "background-color: #ffcccc;";
 
+
 AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 {
+
     setWindowTitle("Process Manager");
     setModal(true);
     syscallsSels = {};
     ruleTypeSels = {};
-    restrictPath = {};
+    restrictPathes = {};
 
     QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins({10,0,10,0});
+    
+    QMenuBar *menuBar = new QMenuBar(this);
+    menuBar->setBaseSize(100, 100);
+    QMenu *rulesMenu = menuBar->addMenu("Rules");
+
+    QAction *addRuleAction = new QAction("Add", this);
+    connect(addRuleAction, &QAction::triggered, this, &AddProcessDialog::addRule);
+    rulesMenu->addAction(addRuleAction);
+
+    QAction *saveRulesAction = new QAction("Save", this);
+    connect(saveRulesAction, &QAction::triggered, this, &AddProcessDialog::menuSaveRules);
+    rulesMenu->addAction(saveRulesAction);
+
+    all_rulesets = getAllRules();
+
+    importMenu = rulesMenu->addMenu("Import");
+
+    for (std::pair<std::string, ConfigRules> ruleset : all_rulesets) {
+        QAction *importAction = new QAction(QString::fromStdString(ruleset.second.name), this);
+        connect(importAction, &QAction::triggered, [this, ruleset]() { menuImportRule(ruleset.first); });
+        importMenu->addAction(importAction);
+    }  
+
+    layout->setMenuBar(menuBar);
+    
+    layout->addSpacing(20);
 
     QFormLayout *formLayout = new QFormLayout();
     progNameEdit = new QLineEdit(this);
@@ -101,26 +132,12 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
         if (column == 3) {
             syscallsSels.erase(syscallsSels.begin() + row);
             ruleTypeSels.erase(ruleTypeSels.begin() + row);
-            restrictPath.erase(restrictPath.begin() + row);
+            restrictPathes.erase(restrictPathes.begin() + row);
             rulesTable->removeRow(row);
         }
     });
 
     layout->addWidget(rulesTable);
-
-
-    // QHBoxLayout *rulesetLayout = new QHBoxLayout();
-    // QPushButton *saveSetButton = new QPushButton("Save ruleset", this);    
-    // // connect(addRuleButton, &QPushButton::clicked, this, &AddProcessDialog::addRule);
-    // QComboBox *ruleSetSel = new QComboBox(this);
-
-    // rulesetLayout->addWidget(saveSetButton);
-    // rulesetLayout->addSpacing(20);
-    // rulesetLayout->addWidget(ruleSetSel);
-
-    // layout->addLayout(rulesetLayout);
-
-    // layout->addSpacing(30);
 
     QPushButton *saveButton = new QPushButton("Save", this);
     QPushButton *cancelButton = new QPushButton("Cancel", this);
@@ -132,6 +149,8 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
     buttonLayout->addWidget(saveButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
+
+    layout->addSpacing(10);
 
     resize(600, 600);
 }
@@ -150,9 +169,9 @@ AddProcessDialog::AddProcessDialog(QWidget *parent, ProcessInfo& process_info) :
         {
             message += invertedSyscallMap[syscall] + " ";
         }
-        AddRuleRow(message);
-        ruleTypeSels[i]->setCurrentIndex(process_info.rules[i].restrict_all ? 0 : 1);
-        restrictPath[i]->setText(process_info.rules[i].path_info);
+        int row = AddRuleRow(message);
+        ruleTypeSels[row]->setCurrentIndex(process_info.rules[i].restrict_all ? 0 : 1);
+        restrictPathes[row]->setText(process_info.rules[i].path_info);
     }
 }
 
@@ -216,7 +235,7 @@ QVector<RuleInfoGui> AddProcessDialog::getRules() const
         }
         res.append({qvec_res_syscalls,
                     ruleTypeSels[row]->currentIndex() == 0,
-                    restrictPath[row]->text()});
+                    restrictPathes[row]->text()});
     }
     return res;
 }
@@ -237,7 +256,7 @@ void AddProcessDialog::addRule()
     }
 }
 
-void AddProcessDialog::AddRuleRow(QString &message)
+int AddProcessDialog::AddRuleRow(QString &message)
 {
     QComboBox *ruleTypeSel = new QComboBox(this);
     ruleTypeSel->addItem("Any");
@@ -266,7 +285,7 @@ void AddProcessDialog::AddRuleRow(QString &message)
     rulesTable->setCellWidget(rowCount, 1, ruleTypeSel);
 
     QLineEdit *path_item = new QLineEdit();
-    restrictPath.push_back(path_item);
+    restrictPathes.push_back(path_item);
     path_item->setEnabled(false);
     connect(ruleTypeSel, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [path_item](int index)
             {
@@ -293,6 +312,8 @@ void AddProcessDialog::AddRuleRow(QString &message)
     table_item->setFlags(Qt::ItemIsEnabled); 
 
     rulesTable->setItem(rowCount, 3, table_item);
+
+    return rowCount;
 }
 
 void AddProcessDialog::checkAndAccept() {
@@ -304,8 +325,8 @@ void AddProcessDialog::checkAndAccept() {
     }
 
     for (int i = 0; i < rulesTable->rowCount(); i++) {
-        if (ruleTypeSels[i]->currentIndex() == 1 && restrictPath[i]->text().isEmpty()) {
-            restrictPath[i]->setStyleSheet(INP_ERROR_STYLES); 
+        if (ruleTypeSels[i]->currentIndex() == 1 && restrictPathes[i]->text().isEmpty()) {
+            restrictPathes[i]->setStyleSheet(INP_ERROR_STYLES); 
             valid = false;
         }
 
@@ -319,5 +340,75 @@ void AddProcessDialog::checkAndAccept() {
         QMessageBox::warning(this, "Warning", "Please fill in the highlighted fields.");
     } else {
         accept();
+    }
+}
+
+void AddProcessDialog::menuAddRule() {
+    qDebug("Add Rule clicked");
+}
+
+void AddProcessDialog::menuSaveRules() {
+    bool ok;
+    QString name = QInputDialog::getText(this, tr("Save Rules"),
+                                            tr("Enter rule name:"), QLineEdit::Normal,
+                                            "", &ok);
+    if (ok && !name.isEmpty()) {
+
+        auto now = std::chrono::system_clock::now();
+        std::time_t unix_time = std::chrono::system_clock::to_time_t(now);
+
+        std::vector<ConfigRuleData> ruleData = {};
+        
+        for (int row = 0; row < rulesTable->rowCount(); row++)
+        {
+            QString text = syscallsSels[row]->text();
+            QVector<QString> words = text.split(" ", Qt::SkipEmptyParts).toVector();
+
+            std::set<int> res_syscalls = {};
+            for (int i = 0; i < words.size(); i++)
+            {
+                // check is it a group
+                if (syscallMap.count(words[i]) == 0) { 
+                    for (int j = 0; j < groups[words[i]].size(); j++) {
+                        res_syscalls.insert(syscallMap[groups[words[i]][j]]);
+                    }
+                } else {
+                    res_syscalls.insert(syscallMap[words[i]]);
+                }
+                
+            }
+        
+            std::vector<int> qvec_res_syscalls = {};
+            for (const int& value : res_syscalls) {
+                qvec_res_syscalls.push_back(value);
+            }
+
+            ruleData.push_back({qvec_res_syscalls, ruleTypeSels[row]->currentIndex() == 0, restrictPathes[row]->text().toStdString()});
+            
+        }
+        ConfigRules resConfig = {name.toStdString(), ruleData};
+        int r = saveConfigRules(resConfig, std::to_string(unix_time));
+        if (r == -1) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to save rule");
+        } else {
+            QAction *importAction = new QAction(name, this);
+            connect(importAction, &QAction::triggered, [this, unix_time]() { menuImportRule(std::to_string(unix_time)); });
+            importMenu->addAction(importAction);
+            all_rulesets[std::to_string(unix_time)] = resConfig;
+        }
+    }
+}
+
+void AddProcessDialog::menuImportRule(const std::string &ruleIDStr) {
+    for (const ConfigRuleData &rule : all_rulesets[ruleIDStr].rules) {
+        QString message = "";
+        for (const int &syscall : rule.syscalls)
+        {
+            message += invertedSyscallMap[syscall] + " ";
+        }
+        int row = AddRuleRow(message);
+        ruleTypeSels[row]->setCurrentIndex(rule.restrictAny ? 0 : 1);
+        restrictPathes[row]->setText(QString::fromStdString(rule.path));
+
     }
 }

@@ -23,26 +23,28 @@ set(SRC_FILES
     src/gui/ProcOutputW/ProcOutputW.cpp
     src/gui/AddSyscallsW/AddSyscallsW.cpp 
     src/gui/MainW/MainW.cpp
+    src/gui/AddProcessW/configs/configs.cpp
 )
 
-set(HEADER_FILES
-    src/logic/seccomp/seccomp.h
-    src/logic/ProcessManager/ProcessManager.h
-    src/logic/SocketBridge/SocketBridge.h
-    src/logic/Supervisor/Manager/Supervisor.h
-    src/logic/Supervisor/handlers/handlers.h
-    src/logic/rules/rules.h
-    src/logic/Logger/Logger.h
-    src/gui/ProcOutputW/ProcOutputW.h
-    src/gui/AddProcessW/AddProcessW.h
-    src/gui/AddSyscallsW/AddSyscallsW.h 
-    src/gui/MainW/MainW.h
-)
+# set(HEADER_FILES
+#     src/logic/seccomp/seccomp.h
+#     src/logic/ProcessManager/ProcessManager.h
+#     src/logic/SocketBridge/SocketBridge.h
+#     src/logic/Supervisor/Manager/Supervisor.h
+#     src/logic/Supervisor/handlers/handlers.h
+#     src/logic/rules/rules.h
+#     src/logic/Logger/Logger.h
+#     src/gui/ProcOutputW/ProcOutputW.h
+#     src/gui/AddProcessW/AddProcessW.h
+#     src/gui/AddSyscallsW/AddSyscallsW.h 
+#     src/gui/MainW/MainW.h
+#     src/gui/AddProcessW/configs.h
+# )
 
 
 add_executable(result
     ${SRC_FILES}
-    ${HEADER_FILES}
+    # ${HEADER_FILES}
 )
 
 set_target_properties(result PROPERTIES
