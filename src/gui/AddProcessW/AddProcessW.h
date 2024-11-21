@@ -21,6 +21,21 @@
 #include "configs/configs.h"
 #include "../ProcessInfo.h"
 
+struct HashableRule {
+    std::string syscalls;
+    bool ruleType;
+    std::string path;
+    
+    HashableRule(const std::string &s, bool r, const std::string &p)
+        : syscalls(s), ruleType(r), path(p) {}
+
+    bool operator==(const HashableRule &other) const {
+        return syscalls == other.syscalls &&
+               ruleType == other.ruleType &&
+               path == other.path;
+    }
+};
+
 class AddProcessDialog : public QDialog {
 Q_OBJECT
 public:
@@ -58,5 +73,6 @@ private:
     QTableWidget *rulesTable;
     QStringList elements;    
 
-    std::unordered_map<std::string, ConfigRules> all_rulesets;         
+    std::unordered_map<std::string, ConfigRules> all_rulesets;
+                 
 };

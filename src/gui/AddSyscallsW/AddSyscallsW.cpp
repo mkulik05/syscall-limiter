@@ -57,6 +57,10 @@ QVector<QString> AddSyscallsW::getSelections() const {
     for (int i = 0; i < listWidget->count(); ++i) {
         selections.append(listWidget->item(i)->text());
     }
+    
+    std::sort(selections.begin(), selections.end(), [](const QString &a, const QString &b) {
+        return (a.startsWith("GRP_") && !b.startsWith("GRP_")) || (a < b);
+    });
     return selections;
 }
 

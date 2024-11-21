@@ -76,7 +76,6 @@ ConfigRules readConfigRules(const std::string& filename) {
     size_t nameLength = 0;
     ifs.read(reinterpret_cast<char*>(&nameLength), sizeof(nameLength));
     config.name.resize(nameLength);
-    qInfo() << "LL" << nameLength;
     ifs.read(&config.name[0], nameLength);
 
     size_t rulesCount = 0;
