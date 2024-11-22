@@ -44,7 +44,9 @@ void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rul
 
         case DENY_PATH_ACCESS:
             // Logger::getInstance().log(Logger::Verbosity::ERROR, "checkPathesRule: path: %s, rule path: %s", path.c_str(), rule.path.c_str());
-            if (strncmp(path.c_str(), rule.path.c_str(), strlen(rule.path.c_str())) == 0) {
+            if (path == rule.path || 
+                  (strncmp(path.c_str(), rule.path.c_str(), strlen(rule.path.c_str())) == 0) && 
+                  path[rule.path.size()] == '/') {
                 resp->error = -EACCES;
                 resp->flags = 0;
                 return;
