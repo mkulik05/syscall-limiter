@@ -10,6 +10,12 @@
 #include "../../logic/Logger/Logger.h"
 #include "../ProcOutputW/ProcOutputW.h"
 
+// extern const int GROUP_OFFSET;
+const int GROUP_OFFSET = 1024;
+extern std::unordered_map<int, QString> invertedSyscallMap;
+extern std::unordered_map<QString, QStringList> groups;
+extern std::unordered_map<QString, int> syscallMap;
+
 MainW::MainW()
 {
     process_manager = new ProcessManager();
@@ -130,7 +136,19 @@ void MainW::addElement()
         QVector<int> rules_ids = {};
         for (int i = 0; i < rules.size(); i++)
         {
-            std::vector<int> syscalls(rules[i].syscalls.begin(), rules[i].syscalls.end());
+
+            std::vector<int> syscalls = {};
+            for (const int syscall_n: rules[i].syscalls) {
+                if ((syscall_n & GROUP_OFFSET) == GROUP_OFFSET) {
+                    QString groupName = invertedSyscallMap[syscall_n];
+                    for (const QString &syscall : groups[groupName]) {
+                        syscalls.push_back(syscallMap[syscall]);
+                    }
+                } else {
+                    syscalls.push_back(syscall_n);
+                }
+            }
+
             int id = process_manager->supervisor->addRule(pid, {0, rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, rules[i].path_info.toStdString()}, syscalls);
             rules_ids.append(id);
         }

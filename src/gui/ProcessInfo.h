@@ -4,6 +4,7 @@
 
 struct RuleInfoGui {
     QVector<int> syscalls;
+    
     bool restrict_all;
     QString path_info;
 };

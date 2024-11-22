@@ -23,7 +23,6 @@
 extern QStringList syscalls;
 extern std::unordered_map<QString, int> syscallMap;
 extern std::unordered_map<int, QString> invertedSyscallMap;
-extern std::unordered_map<QString, QStringList> groups;
 
 QString INP_ERROR_STYLES = "background-color: #ffcccc;";
 
@@ -218,29 +217,13 @@ QVector<RuleInfoGui> AddProcessDialog::getRules() const
         QString text = syscallsSels[row]->text();
         QVector<QString> words = text.split(" ", Qt::SkipEmptyParts).toVector();
 
-        std::set<int> res_syscalls = {};
+        QVector<int> res_syscalls = {};
         for (int i = 0; i < words.size(); i++)
         {
-            // check is it a group
-            if (syscallMap.count(words[i]) == 0)
-            {
-                for (int j = 0; j < groups[words[i]].size(); j++)
-                {
-                    res_syscalls.insert(syscallMap[groups[words[i]][j]]);
-                }
-            }
-            else
-            {
-                res_syscalls.insert(syscallMap[words[i]]);
-            }
+            res_syscalls.append(syscallMap[words[i]]);
         }
 
-        QVector<int> qvec_res_syscalls = {};
-        for (const int &value : res_syscalls)
-        {
-            qvec_res_syscalls.append(value);
-        }
-        res.append({qvec_res_syscalls,
+        res.append({res_syscalls,
                     ruleTypeSels[row]->currentIndex() == 0,
                     restrictPathes[row]->text()});
     }
@@ -385,18 +368,7 @@ void AddProcessDialog::menuSaveRules()
             std::set<int> res_syscalls = {};
             for (int i = 0; i < words.size(); i++)
             {
-                // check is it a group
-                if (syscallMap.count(words[i]) == 0)
-                {
-                    for (int j = 0; j < groups[words[i]].size(); j++)
-                    {
-                        res_syscalls.insert(syscallMap[groups[words[i]][j]]);
-                    }
-                }
-                else
-                {
-                    res_syscalls.insert(syscallMap[words[i]]);
-                }
+                res_syscalls.insert(syscallMap[words[i]]);
             }
 
             std::vector<int> qvec_res_syscalls = {};
