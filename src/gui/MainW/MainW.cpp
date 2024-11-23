@@ -209,7 +209,18 @@ void MainW::editElement(QTableWidgetItem *item)
 
             for (int i = 0; i < new_rules.size(); i++)
             {
-                std::vector<int> syscalls(new_rules[i].syscalls.begin(), new_rules[i].syscalls.end());
+                std::vector<int> syscalls = {};
+                for (const int syscall_n: new_rules[i].syscalls) {
+                    if ((syscall_n & GROUP_OFFSET) == GROUP_OFFSET) {
+                        QString groupName = invertedSyscallMap[syscall_n];
+                        for (const QString &syscall : groups[groupName]) {
+                            syscalls.push_back(syscallMap[syscall]);
+                        }
+                    } else {
+                        syscalls.push_back(syscall_n);
+                    }
+                }
+
                 new_rules_info.push_back({{0, new_rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, new_rules[i].path_info.toStdString()}, syscalls});
             }
 

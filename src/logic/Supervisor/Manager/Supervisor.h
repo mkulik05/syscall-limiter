@@ -21,8 +21,9 @@ class Supervisor {
         std::vector<int> updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules);
 
         pid_t pid;
+        
+        void ruleInit(pid_t pid);
     private:
-
         int addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls); 
         void deleteRuleUnsync(int rule_id);
         void handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd);
@@ -48,4 +49,6 @@ class Supervisor {
 
         // { syscall_n: handler_pnt}
         std::unordered_map<int, MapHandler> map_handlers;
+
+        int curr_syscalls_n;
 };

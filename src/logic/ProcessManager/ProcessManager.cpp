@@ -221,8 +221,10 @@ pid_t ProcessManager::addProcess(std::string cmd, std::string log_path) {
     }
     Logger::getInstance().log(Logger::Verbosity::INFO, "Adding process: before receiving new proc fd");
     int process_pid = this->started_pids_bridge->recv_int();
-    Logger::getInstance().log(Logger::Verbosity::INFO, "FD received: %d", process_pid);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "process PID received: %d", process_pid);
     this->startedPIDs.push_back(process_pid);
+
+    supervisor->ruleInit(process_pid);
     return process_pid;
 }
 

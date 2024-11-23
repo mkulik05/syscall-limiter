@@ -31,8 +31,11 @@
 #include "../handlers/handlers.h"
 #include "../../Logger/Logger.h"
 
+#define ALLOWED_SYSCALLS_N 6
+
 Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd_dis(0, 4294967295)
 {
+    curr_syscalls_n = 0;
     add_handlers(this->map_handlers);
     this->starter_pid = starter_pid;
     semaphore = sem_open("/sync_access", O_CREAT, 0666, 1);
@@ -64,12 +67,7 @@ void Supervisor::run(int notifyFd)
             Logger::getInstance().log(Logger::Verbosity::ERROR, "SECCOMP_IOCTL_NOTIF_RECV error: %s", strerror(errno));
             if (errno == EINTR)
                 continue;
-            // err(EXIT_FAILURE, "ioctl-SECCOMP_IOCTL_NOTIF_RECV failed");
             continue;
-        }
-        else
-        {
-            // Logger::getInstance().log(Logger::Verbosity::DEBUG, "SECCOMP_IOCTL_NOTIF_RECV OK");
         }
 
         resp->id = req->id;
@@ -158,13 +156,31 @@ void printMap3(const std::unordered_map<int, std::map<int, std::vector<Rule>>> &
 }
 
 
+void printRuleInfo(const std::unordered_map<int, RuleInfo> &map_rules_info) {
+    for (const auto &pair : map_rules_info) {
+        int ruleKey = pair.first;
+        const RuleInfo &ruleInfo = pair.second;
+
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Key: %d", ruleKey);
+
+        Logger::getInstance().log(Logger::Verbosity::INFO, "  PIDs: ");
+        for (const int pid : ruleInfo.pids) {
+            Logger::getInstance().log(Logger::Verbosity::INFO, "    %d", pid);
+        }
+        Logger::getInstance().log(Logger::Verbosity::INFO, "  System Calls: ");
+        for (const int syscall : ruleInfo.vec_syscalls) {
+            Logger::getInstance().log(Logger::Verbosity::INFO, "    %d", syscall);
+        }
+    }
+}
+
 pid_t get_tgid(int pid) {
     char path[256];
     snprintf(path, sizeof(path), "/proc/%d/status", pid);
 
     FILE *file = fopen(path, "r");
     if (!file) {
-        perror("Failed to open file");
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to get tgid: %s for pid: %d", strerror(errno), pid);
         return -1;
     }
 
@@ -225,8 +241,13 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
         return;
     }
 
+    if (curr_syscalls_n <= ALLOWED_SYSCALLS_N) {
+        curr_syscalls_n++;
+        return;
+    }
+
     // Logger::getInstance().log(Logger::Verbosity::INFO, "Syscall n: %d; pid: %d", req->data.nr, req->pid);
-    // printMap3(map_all_rules);
+    
     if ((this->map_all_rules.size() != 0) && (this->map_all_rules.count(req->pid) == 0))
     {
         Logger::getInstance().log(Logger::Verbosity::DEBUG, "Finding rules for PID: %d", req->pid);
@@ -243,6 +264,7 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
                 {
                     Logger::getInstance().log(Logger::Verbosity::DEBUG, "TGID found: %d", pid);
                     map_all_rules[req->pid] = map_all_rules[pid];
+                    map_pid_rules[req->pid] = map_pid_rules[pid];
                     for (int i = 0; i < map_pid_rules[pid].size(); i++)
                     {
                         int r_id = map_pid_rules[pid][i];
@@ -261,9 +283,10 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
             {
                 Logger::getInstance().log(Logger::Verbosity::DEBUG, "PID found: %d", pid);
                 map_all_rules[req->pid] = map_all_rules[pid];
-                for (int i = 0; i < map_pid_rules[pid].size(); i++)
+                map_pid_rules[req->pid] = map_pid_rules[pid];
+                for (int i = 0; i < map_pid_rules[req->pid].size(); i++)
                 {
-                    int r_id = map_pid_rules[pid][i];
+                    int r_id = map_pid_rules[req->pid][i];
                     map_rules_info[r_id].pids.push_back(req->pid);
                 }
                 break;
@@ -325,26 +348,38 @@ void Supervisor::deleteRule(int rule_id)
 void Supervisor::deleteRuleUnsync(int rule_id)
 {
     RuleInfo info = this->map_rules_info[rule_id];
-    for (int i = 0; i < info.vec_syscalls.size(); i++)
+    for (int j = 0; j < info.pids.size(); j++)
     {
-        for (int j = 0; j < info.pids.size(); j++)
+        int pid = info.pids[j];
+        for (int i = 0; i < info.vec_syscalls.size(); i++)
         {
-            int pid = info.pids[j];
             int del_i = -1;
-            for (size_t j = 0; j < this->map_all_rules[pid][info.vec_syscalls[i]].size(); j++)
+            for (size_t k = 0; k < this->map_all_rules[pid][info.vec_syscalls[i]].size(); k++)
             {
-                if (this->map_all_rules[pid][info.vec_syscalls[i]][j].rule_id == rule_id)
+                if (this->map_all_rules[pid][info.vec_syscalls[i]][k].rule_id == rule_id)
                 {
-                    del_i = j;
+                    del_i = k;
                     break;
                 }
             }
             if (del_i != -1)
             {
                 this->map_all_rules[pid][info.vec_syscalls[i]].erase(this->map_all_rules[pid][info.vec_syscalls[i]].begin() + del_i);
+
             }
+
+            if (map_all_rules[pid][info.vec_syscalls[i]].size() == 0) {
+                map_all_rules[pid].erase(info.vec_syscalls[i]);
+            }
+            
         }
+
+        if (map_all_rules[pid].size() == 0) {
+            map_all_rules.erase(pid);
+        }
+        
     }
+
     this->map_rules_info.erase(rule_id);
     Logger::getInstance().log(Logger::Verbosity::INFO, "Deleted rule with ID: %d", rule_id);
 }
@@ -361,8 +396,21 @@ int Supervisor::updateRule(pid_t pid, int rule_id, Rule rule)
     return id;
 }
 
+void Supervisor::ruleInit(pid_t pid) {
+    sem_wait(this->semaphore);
+    this->map_all_rules[pid] = {};
+    sem_post(this->semaphore);
+}
+
 std::vector<int> Supervisor::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules)
 {
+
+    Logger::getInstance().log(Logger::Verbosity::INFO, "\n\n+++++++++++++++++++++++++++\n\n\n");
+    printRuleInfo(this->map_rules_info);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "\n\n+++++++++++++++++++++++++++\n\n\n");
+    
+
+    printMap3(map_all_rules);
     std::vector<int> res = {};
     sem_wait(this->semaphore);
 
@@ -371,11 +419,16 @@ std::vector<int> Supervisor::updateRules(pid_t pid, std::vector<int> del_rules_i
         this->deleteRuleUnsync(del_rules_id[i]);
     }
 
+    Logger::getInstance().log(Logger::Verbosity::INFO, "\n\n---------------------\n\n\n");
+    printMap3(map_all_rules);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "\n\n---------------------\n\n\n");
     for (int i = 0; i < new_rules.size(); i++)
     {
         res.push_back(this->addRuleUnsync(pid, new_rules[i].first, new_rules[i].second));
     }
 
     sem_post(this->semaphore);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "lallalalalalalalalallalalalallalalalala");
+    printMap3(map_all_rules);
     return res;
 }
