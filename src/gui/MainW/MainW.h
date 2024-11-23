@@ -12,7 +12,7 @@
 #include <QComboBox>
 
 #include "../AddProcessW/AddProcessW.h" 
-#include "../../logic/ProcessManager/ProcessManager.h"
+#include "../../logic/ProcessManager/PM/ProcessManager.h"
 #include "../ProcessInfo.h"
 
 class MainW : public QWidget {

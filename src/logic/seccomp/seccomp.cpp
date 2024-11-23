@@ -25,10 +25,7 @@
 #include <iostream>
 #include <sys/mman.h>
 
-#include "../Supervisor/Manager/Supervisor.h"
 #include "../seccomp/seccomp.h"
-#include "../ProcessManager/ProcessManager.h"
-
 
 int seccomp(unsigned int operation, unsigned int flags, void *args)
 {

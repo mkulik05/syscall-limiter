@@ -9,6 +9,7 @@
 #include "../../logic/rules/rules.h"
 #include "../../logic/Logger/Logger.h"
 #include "../ProcOutputW/ProcOutputW.h"
+#include "../../logic/ProcessManager/PMSingleSupervisor/PMSingleSupervisor.h"
 
 // extern const int GROUP_OFFSET;
 const int GROUP_OFFSET = 1024;
@@ -18,7 +19,7 @@ extern std::unordered_map<QString, int> syscallMap;
 
 MainW::MainW()
 {
-    process_manager = new ProcessManager();
+    process_manager = new PMSingleSupervisor();
 
     running_n = 0;
     processes_info = {};
@@ -149,7 +150,7 @@ void MainW::addElement()
                 }
             }
 
-            int id = process_manager->supervisor->addRule(pid, {0, rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, rules[i].path_info.toStdString()}, syscalls);
+            int id = process_manager->addRule(pid, {0, rules[i].restrict_all ? DENY_ALWAYS : DENY_PATH_ACCESS, rules[i].path_info.toStdString()}, syscalls);
             rules_ids.append(id);
         }
 
@@ -230,7 +231,7 @@ void MainW::editElement(QTableWidgetItem *item)
             if (maxMem != 0)
                 memStr = std::to_string(maxMem * 1024 * 1024);
             process_manager->setMemTime(processes_info[row].pid, memStr, maxTime);
-            std::vector<int> rules_ids = process_manager->supervisor->updateRules(processes_info[row].pid, old_rules_ids, new_rules_info);
+            std::vector<int> rules_ids = process_manager->updateRules(processes_info[row].pid, old_rules_ids, new_rules_info);
             processes_info[row].rules = new_rules;
             processes_info[row].rules_ids = QVector<int>(rules_ids.begin(), rules_ids.end());
         }

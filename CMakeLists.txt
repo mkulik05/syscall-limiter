@@ -14,7 +14,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SRC_FILES
     src/main.cpp
     src/logic/seccomp/seccomp.cpp
-    src/logic/ProcessManager/ProcessManager.cpp
+    src/logic/ProcessManager/PM/ProcessManager.cpp
+    src/logic/ProcessManager/PMSingleSupervisor/PMSingleSupervisor.cpp
     src/logic/SocketBridge/SocketBridge.cpp
     src/logic/Supervisor/handlers/handlers.cpp
     src/logic/Supervisor/Manager/Supervisor.cpp
