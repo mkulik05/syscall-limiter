@@ -3,9 +3,10 @@
 #include <fcntl.h>
 #include <string>
 #include <vector>
-#include <thread>
+#include <unordered_map>
+
 #include "../../SocketBridge/SocketBridge.h"
-#include "../../Supervisor/Manager/Supervisor.h"
+#include "../../rules/rules.h"
 
 class ProcessManager {
     public:

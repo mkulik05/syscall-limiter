@@ -18,7 +18,8 @@ set(SRC_FILES
     src/logic/ProcessManager/PMSingleSupervisor/PMSingleSupervisor.cpp
     src/logic/SocketBridge/SocketBridge.cpp
     src/logic/Supervisor/handlers/handlers.cpp
-    src/logic/Supervisor/Manager/Supervisor.cpp
+    src/logic/Supervisor/Manager/Supervisor/Supervisor.cpp
+    src/logic/Supervisor/Manager/OneProcessSP/OneProcessSP.cpp
     src/logic/Logger/Logger.cpp
     src/gui/AddProcessW/AddProcessW.cpp 
     src/gui/ProcOutputW/ProcOutputW.cpp

@@ -1,3 +1,4 @@
+#include <cstdint>
 int seccomp(unsigned int operation, unsigned int flags, void *args);
 bool cookieIsValid(int notifyFd, uint64_t id);
 int installNotifyFilter(void);

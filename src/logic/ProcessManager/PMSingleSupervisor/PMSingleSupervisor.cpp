@@ -5,6 +5,7 @@
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
+#include <qlogging.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -20,37 +21,42 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <map>
 #include <vector>
 #include <iostream>
 #include <sys/mman.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/wait.h>
-#include <fstream>
 #include <sys/types.h>
 #include <pwd.h>
 #include <sys/resource.h>
-#include <fstream>
-#include <sstream>
+#include <QDebug>
 
-#include "../../Supervisor/Manager/Supervisor.h"
+
+#include "../../SocketBridge/SocketBridge.h"
+#include "../../Supervisor/Manager/OneProcessSP/OneProcessSP.h"
 #include "../../seccomp/seccomp.h"
 #include "PMSingleSupervisor.h"
 #include "../../Logger/Logger.h" 
 
 
-PMSingleSupervisor::~PMSingleSupervisor() {
+PMManySupervisors::~PMManySupervisors() {
     kill(this->process_starter_pid, SIGTERM);
     for (int i = 0; i < this->startedPIDs.size(); i++) {
         kill(this->startedPIDs[i], SIGTERM);
     }
-    kill(this->supervisor->pid, SIGTERM);
-    this->thread_supervisor.~thread();
+    this->supervisor->stopRunning();
+    pthread_kill(this->thread_supervisor.native_handle(), SIGINT);
+    this->thread_supervisor.join();
+
+    runnable = false;
+    pthread_kill(this->thread_process_starter.native_handle(), SIGINT);
+    this->thread_process_starter.join();
 }
 
-PMSingleSupervisor::PMSingleSupervisor() : ProcessManager()
+PMManySupervisors::PMManySupervisors() : ProcessManager()
 {   
+    runnable = true;
     pid_t targetPid = fork();
 
     if (targetPid == -1) {
@@ -59,7 +65,7 @@ PMSingleSupervisor::PMSingleSupervisor() : ProcessManager()
     }
 
     if (targetPid > 0) {
-        this->supervisor = new Supervisor(targetPid);
+        this->supervisor = new OneProcessSP(targetPid);
         Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter pid: %d", targetPid);
         this->thread_supervisor = std::thread([this, targetPid]() {
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Before starting supervisor in sep thread");
@@ -75,7 +81,7 @@ PMSingleSupervisor::PMSingleSupervisor() : ProcessManager()
     exit(EXIT_SUCCESS);
 }
 
-void PMSingleSupervisor::startProcess(pid_t pid) {    
+void PMManySupervisors::startProcess(pid_t pid) {    
     usleep(100000); // 100ms
 
     Logger::getInstance().log(Logger::Verbosity::INFO, "SIGCONT sender: Starting process with PID: %d", pid);
@@ -83,12 +89,12 @@ void PMSingleSupervisor::startProcess(pid_t pid) {
 }
 
 
-void PMSingleSupervisor::stopProcess(pid_t pid) {
+void PMManySupervisors::stopProcess(pid_t pid) {
     kill(pid, SIGTERM);
 }
 
 
-pid_t PMSingleSupervisor::addProcess(std::string cmd, std::string log_path) {
+pid_t PMManySupervisors::addProcess(std::string cmd, std::string log_path) {
     Strings buf = {cmd, log_path};
     int r = task_bridge->send_strings(buf);
     if (r != 0) {
@@ -105,7 +111,7 @@ pid_t PMSingleSupervisor::addProcess(std::string cmd, std::string log_path) {
     return process_pid;
 }
 
-void PMSingleSupervisor::start_supervisor(pid_t starter_pid) {
+void PMManySupervisors::start_supervisor(pid_t starter_pid) {
     Logger::getInstance().log(Logger::Verbosity::INFO, "%d ", 44);
     int notifyFd = fd_bridge->recv_fd();
     if (notifyFd == -1) {
@@ -118,7 +124,7 @@ void PMSingleSupervisor::start_supervisor(pid_t starter_pid) {
     supervisor->run(notifyFd);
 }
 
-void PMSingleSupervisor::process_starter() {
+void PMManySupervisors::process_starter() {
 
     downgrade_privileges();
 
@@ -136,7 +142,7 @@ void PMSingleSupervisor::process_starter() {
 
     Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: sent fd");
 
-    for (;;) {
+    while (runnable) {
         Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: waiting for command to start");
 
         Strings task;
@@ -183,10 +189,10 @@ void PMSingleSupervisor::process_starter() {
     Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: finished execution");
 }
 
-int PMSingleSupervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls) {
+int PMManySupervisors::addRule(pid_t pid, Rule rule, std::vector<int> syscalls) {
     return supervisor->addRule(pid, rule, syscalls);
 }
 
-std::vector<int> PMSingleSupervisor::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) {
+std::vector<int> PMManySupervisors::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) {
     return supervisor->updateRules(pid, del_rules_id, new_rules);
 }

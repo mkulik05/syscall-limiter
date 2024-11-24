@@ -4,14 +4,13 @@
 #include <string>
 #include <vector>
 #include <thread>
-#include "../../SocketBridge/SocketBridge.h"
-#include "../../Supervisor/Manager/Supervisor.h"
+#include "../../Supervisor/Manager/OneProcessSP/OneProcessSP.h"
 #include "../PM/ProcessManager.h"
 
-class PMSingleSupervisor: public ProcessManager {
+class PMManySupervisors: public ProcessManager {
     public:
-        PMSingleSupervisor();
-        ~PMSingleSupervisor();
+        PMManySupervisors();
+        ~PMManySupervisors();
 
         pid_t addProcess(std::string cmd, std::string log_path) override;
         void startProcess(pid_t pid) override;
@@ -21,7 +20,7 @@ class PMSingleSupervisor: public ProcessManager {
 
         std::vector<int> updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) override;
 
-        Supervisor* supervisor;
+        OneProcessSP* supervisor;
         
     private:
 
@@ -30,4 +29,6 @@ class PMSingleSupervisor: public ProcessManager {
         void process_starter();
         void start_supervisor(pid_t starter_pid);
         std::thread thread_supervisor, thread_process_starter;
+
+        bool runnable;
 };

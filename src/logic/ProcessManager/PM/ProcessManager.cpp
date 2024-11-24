@@ -9,7 +9,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -20,9 +19,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <map>
 #include <vector>
-#include <iostream>
 #include <sys/mman.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -34,7 +31,6 @@
 #include <fstream>
 #include <sstream>
 
-#include "../../Supervisor/Manager/Supervisor.h"
 #include "../../seccomp/seccomp.h"
 #include "../../Logger/Logger.h" 
 #include "ProcessManager.h"
@@ -43,7 +39,6 @@
 extern const char *program_pathname;
 
 std::string getCgroupMountPoint();
-
 
 
 ProcessManager::~ProcessManager() {

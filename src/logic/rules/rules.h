@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <map>
 #include <string>
 
 enum RuleType { DENY_PATH_ACCESS = 0, DENY_ALWAYS, ALLOW_WITH_LOG };

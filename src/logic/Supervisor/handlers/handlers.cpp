@@ -5,7 +5,6 @@
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -20,11 +19,9 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <map>
 #include <vector>
 #include <sys/mman.h>
 
-#include "../../Supervisor/Manager/Supervisor.h"
 #include "../../seccomp/seccomp.h"
 #include "handlers.h"
 #include "../../Logger/Logger.h"

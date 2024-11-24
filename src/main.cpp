@@ -1,10 +1,10 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <unordered_map>
-#include <vector>
 #include <QApplication>
 #include <QStringList>
 #include <QString>
+#include <iostream>
 
 #include "gui/MainW/MainW.h"
 

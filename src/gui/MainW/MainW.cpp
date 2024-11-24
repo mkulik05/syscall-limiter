@@ -19,7 +19,7 @@ extern std::unordered_map<QString, int> syscallMap;
 
 MainW::MainW()
 {
-    process_manager = new PMSingleSupervisor();
+    process_manager = new PMManySupervisors();
 
     running_n = 0;
     processes_info = {};

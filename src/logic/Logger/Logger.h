@@ -1,13 +1,11 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <iostream>
 #include <fstream>
 #include <string>
 #include <mutex>
 #include <ctime>
-#include <iomanip>
-#include <sstream>
+
 
 class Logger {
 public:
