@@ -30,8 +30,9 @@
 #include "../../Logger/Logger.h"
 
 bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
-                  int argNum, char *path, size_t len);
+                       int argNum, char *path, size_t len);
 
+int getPathWithCWD(seccomp_notif *req, seccomp_notif_resp *resp, char path[PATH_MAX]);
 
 void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rule>& rules) {
     for (int i = 0; i < rules.size(); i++) {
@@ -55,9 +56,41 @@ void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rul
         }   
     }
 }
+std::string getProcessCWD(pid_t pid) {
+    std::string cwdPath = "/proc/" + std::to_string(pid) + "/cwd";
+    char cwd[PATH_MAX];
+    
+    ssize_t len = readlink(cwdPath.c_str(), cwd, sizeof(cwd) - 1);
+    if (len != -1) {
+        cwd[len] = '\0';
+        return std::string(cwd);
+    } else {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to get process (%d) cwd: %s", pid, strerror(errno));
+        return "";
+    }
+}
+
+int getRealPath(const char* src_path, char* buf) {
+    
+    if (realpath(src_path, buf) == nullptr) {
+        
+        int fd = open(src_path, O_CREAT);
+        if (realpath(src_path, buf) == nullptr) {
+            close(fd);
+            unlink(src_path);
+            return -1;
+        }
+        close(fd);
+        unlink(src_path);
+    }
+    
+    return 0;
+}
 
 void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    
     char path[PATH_MAX];
+
     bool pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
 
     if (!pathOK) {
@@ -65,6 +98,13 @@ void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int n
         resp->flags = 0;
         return;
     }
+
+    if (path[0] != '/') {
+        if (getPathWithCWD(req, resp, path) == -1) {
+            return;
+        }
+    }
+
     checkPathesRule(path, resp, rules);
 }
 
@@ -101,18 +141,12 @@ void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, in
 
     Logger::getInstance().log(Logger::Verbosity::DEBUG, "Openat syscall: ");
     if (dirfd == AT_FDCWD) {
-        if (realpath(path_arg2, path) == nullptr) {
-            int fd = open(path_arg2, O_CREAT);
-            if (realpath(path_arg2, path) == nullptr) {
-                resp->error = -ENOENT;
-                resp->flags = 0;
-                close(fd);
-                unlink(path_arg2);
+
+        if (path[0] != '/') {
+            if (getPathWithCWD(req, resp, path) == -1)
                 return;
-            }
-            close(fd);
-            unlink(path_arg2);
         }
+
         Logger::getInstance().log(Logger::Verbosity::INFO, "Path_arg2: %s, Res path: %s", path_arg2, path);            
     } else {
         char resolvedPath[PATH_MAX];
@@ -132,6 +166,37 @@ void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, in
     }
 
     checkPathesRule(path, resp, rules);
+}
+
+int getPathWithCWD(seccomp_notif *req, seccomp_notif_resp *resp, char path[PATH_MAX])
+{
+    std::string cwd = getProcessCWD(req->pid);
+    if (cwd.empty())
+    {
+        resp->error = -EINVAL;
+        resp->flags = 0;
+        return -1;
+    }
+
+    std::string fullPath = cwd + "/" + path;
+    char resolvedPath[PATH_MAX];
+
+    int res = getRealPath(fullPath.c_str(), resolvedPath);
+
+
+    if (res == -1)
+    {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to resolve path: %s", strerror(errno));
+        resp->error = -errno;
+        resp->flags = 0;
+        return -1;
+    }
+
+    strncpy(path, resolvedPath, PATH_MAX - 1);
+
+    
+    path[PATH_MAX - 1] = '\0';
+    return 0;
 }
 
 bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char *path, size_t len) {
@@ -198,6 +263,7 @@ void handle_get_dents_restriction(seccomp_notif *req, seccomp_notif_resp *resp, 
 
 
 void handle_write_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    
     bool pathOK;
     char path[PATH_MAX];
 
@@ -220,6 +286,26 @@ void handle_write_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int 
     Logger::getInstance().log(Logger::Verbosity::INFO, "write resp flags: %d, error: %d", resp->flags, resp->error);
 }
 
+void handle_mkdir_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    
+    char path[PATH_MAX];
+
+    bool pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
+    if (!pathOK) {
+        resp->error = -EINVAL;
+        resp->flags = 0;
+        return;
+    }
+
+    if (path[0] != '/') {
+        if (getPathWithCWD(req, resp, path) == -1) {
+            return;
+        }
+    }
+
+    checkPathesRule(path, resp, rules);
+}
+
 void add_handlers(std::unordered_map<int, MapHandler>& map) {
     
     map[SYS_open] = handle_path_restriction;
@@ -236,7 +322,7 @@ void add_handlers(std::unordered_map<int, MapHandler>& map) {
     
     // add rename, renameat, renameat2
     
-    map[SYS_mkdir] = handle_path_restriction;
+    map[SYS_mkdir] = handle_mkdir_restriction;
     map[SYS_mkdirat] = handle_fd_path_restriction;
     map[SYS_rmdir] = handle_path_restriction;
     map[SYS_creat] = handle_path_restriction;
