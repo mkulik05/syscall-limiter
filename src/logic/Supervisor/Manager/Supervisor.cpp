@@ -8,7 +8,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -19,20 +18,121 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <map>
 #include <vector>
 #include <sys/mman.h>
+#include <map>
 #include <sstream>
 #include <fstream>
 
-#include "OneProcessSP.h"
-#include "../../../seccomp/seccomp.h"
-#include "../../handlers/handlers.h"
-#include "../../../Logger/Logger.h"
+#include "Supervisor.h"
+#include "../../seccomp/seccomp.h"
+#include "../handlers/handlers.h"
+#include "../../Logger/Logger.h"
+
 
 #define ALLOWED_SYSCALLS_N 6
 
-OneProcessSP::OneProcessSP(pid_t starter_pid) : Supervisor(starter_pid) {}
+Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd_dis(0, 4294967295)
+{
+    runnable = true;
+    curr_syscalls_n = 0;
+    add_handlers(this->map_handlers);
+    this->starter_pid = starter_pid;
+    semaphore = sem_open("/sync_access", O_CREAT, 0666, 1);
+    sem_init(semaphore, 0, 1);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "Supervisor initialized with starter PID: %d", starter_pid);
+}
+
+void Supervisor::stopRunning() {
+    runnable = false;
+}
+
+void Supervisor::run(int notifyFd)
+{
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "Supervisor euid now: %d", geteuid());
+    
+
+    struct seccomp_notif *req;
+    struct seccomp_notif_resp *resp;
+    struct seccomp_notif_sizes sizes;
+
+    allocSeccompNotifBuffers(&req, &resp, &sizes);
+
+    Logger::getInstance().log(Logger::Verbosity::INFO, "Supervisor started");
+
+    while (runnable)
+    {
+        memset(req, 0, sizes.seccomp_notif);
+        // Logger::getInstance().log(Logger::Verbosity::DEBUG, "Waiting for notification on FD: %d", notifyFd);
+
+        if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1)
+        {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "SECCOMP_IOCTL_NOTIF_RECV error: %s", strerror(errno));
+            continue;
+        }
+
+        resp->id = req->id;
+
+        sem_wait(this->semaphore);
+        this->handle_syscall(req, resp, notifyFd);
+        sem_post(this->semaphore);
+
+        if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1)
+        {
+            if (errno == ENOENT)
+            {
+                Logger::getInstance().log(Logger::Verbosity::WARNING, "Response failed with ENOENT; perhaps target process's syscall was interrupted by a signal?");
+            }
+            else
+            {
+                Logger::getInstance().log(Logger::Verbosity::ERROR, "ioctl-SECCOMP_IOCTL_NOTIF_SEND error: %s", strerror(errno));
+            }
+        }
+    }
+
+    free(req);
+    free(resp);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "Supervisor terminating");
+    exit(EXIT_SUCCESS);
+}
+
+int Supervisor::addRule(pid_t pid, Rule rule, std::vector<int> syscalls)
+{
+    sem_wait(this->semaphore);
+    int res = this->addRuleUnsync(pid, rule, syscalls);
+    sem_post(this->semaphore);
+    return res;
+}
+
+void Supervisor::deleteRule(int rule_id)
+{
+    sem_wait(this->semaphore);
+    this->deleteRuleUnsync(rule_id);
+    sem_post(this->semaphore);
+}
+
+
+std::vector<int> Supervisor::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules)
+{
+
+
+    std::vector<int> res = {};
+    sem_wait(this->semaphore);
+
+    for (int i = 0; i < del_rules_id.size(); i++)
+    {
+        this->deleteRuleUnsync(del_rules_id[i]);
+    }
+
+    for (int i = 0; i < new_rules.size(); i++)
+    {
+        res.push_back(this->addRuleUnsync(pid, new_rules[i].first, new_rules[i].second));
+    }
+
+    sem_post(this->semaphore);
+    return res;
+}
+
 
 pid_t get_tgid(int pid) {
     char path[256];
@@ -89,7 +189,8 @@ pid_t getParentPID(pid_t pid)
 }
 
 
-void OneProcessSP::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
+
+void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd)
 {
     resp->error = 0;
     resp->val = 0;
@@ -168,7 +269,7 @@ void OneProcessSP::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, 
     }
 }
 
-int OneProcessSP::addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls)
+int Supervisor::addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls)
 {
 
     int id = std::rand();
@@ -192,7 +293,7 @@ int OneProcessSP::addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls)
     return id;
 }
 
-void OneProcessSP::deleteRuleUnsync(int rule_id)
+void Supervisor::deleteRuleUnsync(int rule_id)
 {
     RuleInfo info = this->map_rules_info[rule_id];
     for (int j = 0; j < info.pids.size(); j++)
@@ -231,7 +332,7 @@ void OneProcessSP::deleteRuleUnsync(int rule_id)
     Logger::getInstance().log(Logger::Verbosity::INFO, "Deleted rule with ID: %d", rule_id);
 }
 
-int OneProcessSP::updateRule(pid_t pid, int rule_id, Rule rule)
+int Supervisor::updateRule(pid_t pid, int rule_id, Rule rule)
 {
     sem_wait(this->semaphore);
     std::vector<int> vec_syscalls = this->map_rules_info[rule_id].vec_syscalls;
@@ -243,7 +344,7 @@ int OneProcessSP::updateRule(pid_t pid, int rule_id, Rule rule)
     return id;
 }
 
-void OneProcessSP::ruleInit(pid_t pid) {
+void Supervisor::ruleInit(pid_t pid) {
     sem_wait(this->semaphore);
     this->map_all_rules[pid] = {};
     sem_post(this->semaphore);

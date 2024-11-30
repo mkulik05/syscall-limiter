@@ -5,7 +5,7 @@
 #include <random>
 #include <semaphore.h>
 
-#include "../../handlers/handlers.h"
+#include "../handlers/handlers.h"
 
 class Supervisor {
     public:
@@ -14,16 +14,21 @@ class Supervisor {
         int addRule(pid_t pid, Rule rule, std::vector<int> syscalls); // returns rule id
         void deleteRule(int rule_id);
 
-        virtual int updateRule(pid_t pid, int rule_id, Rule rule) = 0; // returns new rule id
+        int updateRule(pid_t pid, int rule_id, Rule rule); // returns new rule id
 
         std::vector<int> updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules);
     
         void stopRunning();
 
-    protected:
-        virtual void handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd) = 0;
-        virtual int addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls) = 0; 
-        virtual void deleteRuleUnsync(int rule_id) = 0;
+        void ruleInit(pid_t pid);
+
+        pid_t pid;
+        
+    private:
+        void handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd);
+
+        int addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls); 
+        void deleteRuleUnsync(int rule_id);
 
         int curr_syscalls_n;
         pid_t starter_pid;
@@ -37,6 +42,15 @@ class Supervisor {
         std::mt19937 rnd_gen;                      
         std::uniform_int_distribution<> rnd_dis;
     
-    private:
         bool runnable;
+
+        // { pid: {syscall_n: [rule1, rule2] .. } .. }
+        std::unordered_map<int, std::unordered_map<int, std::vector<Rule>>> map_all_rules;
+
+        // { rule_id : info}
+        std::unordered_map<int, RuleInfo> map_rules_info;
+
+        // {pid: [rule_id1, rule_id2] ..}
+        // Used for speeding up duplication of data in map_rules_ids
+        std::unordered_map<int, std::vector<int>> map_pid_rules;
 };

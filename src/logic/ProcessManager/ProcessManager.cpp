@@ -5,12 +5,10 @@
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
-#include <qlogging.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -22,25 +20,37 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <vector>
-#include <iostream>
 #include <sys/mman.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/wait.h>
+#include <fstream>
 #include <sys/types.h>
 #include <pwd.h>
 #include <sys/resource.h>
-#include <QDebug>
+#include <fstream>
+#include <sstream>
+
+#include "../seccomp/seccomp.h"
+#include "../Logger/Logger.h" 
+#include "ProcessManager.h"
 
 
-#include "../../SocketBridge/SocketBridge.h"
-#include "../../Supervisor/Manager/OneProcessSP/OneProcessSP.h"
-#include "../../seccomp/seccomp.h"
-#include "PMSingleSupervisor.h"
-#include "../../Logger/Logger.h" 
+extern const char *program_pathname;
+
+std::string getCgroupMountPoint();
 
 
-PMManySupervisors::~PMManySupervisors() {
+ProcessManager::~ProcessManager() {
+    delete this->started_pids_bridge;
+    delete this->fd_bridge;
+    for (const auto& pair : map_cgroup) {
+        int res = rmdir(pair.second.c_str());
+        if (res != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to remove cgroup: %s", strerror(errno));
+        } 
+    }
+    
     kill(this->process_starter_pid, SIGTERM);
     for (int i = 0; i < this->startedPIDs.size(); i++) {
         kill(this->startedPIDs[i], SIGTERM);
@@ -54,8 +64,16 @@ PMManySupervisors::~PMManySupervisors() {
     this->thread_process_starter.join();
 }
 
-PMManySupervisors::PMManySupervisors() : ProcessManager()
+ProcessManager::ProcessManager()
 {   
+    Logger::getInstance().setVerbosity(Logger::Verbosity::DEBUG);
+    this->cgroup_path = getCgroupMountPoint();
+    this->map_cgroup = {};
+    this->startedPIDs = std::vector<pid_t>();
+    this->fd_bridge = new SocketBridge();
+    this->task_bridge = new SocketBridge();
+    this->started_pids_bridge = new SocketBridge();
+    
     runnable = true;
     pid_t targetPid = fork();
 
@@ -65,7 +83,7 @@ PMManySupervisors::PMManySupervisors() : ProcessManager()
     }
 
     if (targetPid > 0) {
-        this->supervisor = new OneProcessSP(targetPid);
+        this->supervisor = new Supervisor(targetPid);
         Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter pid: %d", targetPid);
         this->thread_supervisor = std::thread([this, targetPid]() {
             Logger::getInstance().log(Logger::Verbosity::DEBUG, "Before starting supervisor in sep thread");
@@ -81,7 +99,130 @@ PMManySupervisors::PMManySupervisors() : ProcessManager()
     exit(EXIT_SUCCESS);
 }
 
-void PMManySupervisors::startProcess(pid_t pid) {    
+std::string getCgroupMountPoint() {
+    std::ifstream mountsFile("/proc/mounts");
+    if (!mountsFile.is_open()) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Error opening /proc/mounts");
+        return "";
+    }
+
+    std::string line;
+    while (std::getline(mountsFile, line)) {
+        std::istringstream iss(line);
+        std::string device, mountPoint, fstype, options;
+
+        if (iss >> device >> mountPoint >> fstype >> options) {
+            if (mountPoint.find("cgroup") != std::string::npos) {
+                mountsFile.close();
+                return mountPoint;
+            }
+        }
+    }
+
+    mountsFile.close();
+    return "";
+}
+
+int writeToFile(const std::string& path, const std::string& content) {
+    std::ofstream file(path);
+    if (file.is_open()) {
+        file << content;
+        file.close();
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+
+int ProcessManager::setMemTime(pid_t pid, std::string maxMem, int maxTime) {
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "Updating maxMem and maxTime");
+    
+    Logger::getInstance().log(Logger::Verbosity::DEBUG, "euid is %d", getuid());
+
+    
+    if (cgroup_path == "") {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "cgroup_path is empty, skipping: %s", strerror(errno));
+        return -1;
+    }
+    
+    std::string path;
+    if (this->map_cgroup.count(pid) == 0) {
+        path = cgroup_path + "/map_control-" + std::to_string(pid) + "-" + std::to_string(std::rand());
+        if(mkdir(path.c_str(), 0777) == -1) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to create folder: %s", strerror(errno));
+            return -1;
+        }
+        if(writeToFile(path + "/cgroup.procs", std::to_string(pid)) == -1) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup pid: %s", strerror(errno));
+            return -1;
+        }
+        this->map_cgroup[pid] = path;
+    } else {
+        path = map_cgroup[pid];
+    }
+    if(writeToFile(path + "/memory.max", maxMem) == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup memory.max: %s", strerror(errno));
+        return -1;
+    }
+
+    if(writeToFile(path + "/memory.swap.max", "0") == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup memory.swap.max: %s", strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+bool is_process_zombie(pid_t pid) {
+    std::ifstream stat_file("/proc/" + std::to_string(pid) + "/stat");
+    std::string line;
+
+    if (!stat_file.is_open()) {
+        return false;
+    }
+
+    if (std::getline(stat_file, line)) {
+        std::istringstream iss(line);
+        std::string token;
+        int field_index = 0;
+
+        while (iss >> token) {
+            if (field_index == 2) { 
+                return (token == "Z"); 
+            }
+            field_index++;
+        }
+    }
+    return false;
+}
+
+bool ProcessManager::is_process_running(pid_t pid) {
+    return (kill(pid, 0) == 0) && (!is_process_zombie(pid));
+}
+
+void ProcessManager::downgrade_privileges() {
+    struct stat info;
+    stat(program_pathname, &info);
+    struct passwd *pw = getpwuid(info.st_uid);  
+    if (setregid(info.st_gid, info.st_gid) != 0) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setregid)");
+        err(EXIT_FAILURE, "Failed to drop priviledges (setregid)");
+    }
+
+    if (setreuid(info.st_uid, info.st_uid) != 0) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to drop priviledges (setreuid)");
+        err(EXIT_FAILURE, "Failed to drop priviledges (setreuid)");
+    } 
+    
+    if (pw->pw_dir) {
+        setenv("HOME", pw->pw_dir, 1);
+    }
+}
+
+
+
+void ProcessManager::startProcess(pid_t pid) {    
     usleep(100000); // 100ms
 
     Logger::getInstance().log(Logger::Verbosity::INFO, "SIGCONT sender: Starting process with PID: %d", pid);
@@ -89,12 +230,12 @@ void PMManySupervisors::startProcess(pid_t pid) {
 }
 
 
-void PMManySupervisors::stopProcess(pid_t pid) {
+void ProcessManager::stopProcess(pid_t pid) {
     kill(pid, SIGTERM);
 }
 
 
-pid_t PMManySupervisors::addProcess(std::string cmd, std::string log_path) {
+pid_t ProcessManager::addProcess(std::string cmd, std::string log_path) {
     Strings buf = {cmd, log_path};
     int r = task_bridge->send_strings(buf);
     if (r != 0) {
@@ -111,7 +252,7 @@ pid_t PMManySupervisors::addProcess(std::string cmd, std::string log_path) {
     return process_pid;
 }
 
-void PMManySupervisors::start_supervisor(pid_t starter_pid) {
+void ProcessManager::start_supervisor(pid_t starter_pid) {
     Logger::getInstance().log(Logger::Verbosity::INFO, "%d ", 44);
     int notifyFd = fd_bridge->recv_fd();
     if (notifyFd == -1) {
@@ -124,7 +265,7 @@ void PMManySupervisors::start_supervisor(pid_t starter_pid) {
     supervisor->run(notifyFd);
 }
 
-void PMManySupervisors::process_starter() {
+void ProcessManager::process_starter() {
 
     downgrade_privileges();
 
@@ -157,12 +298,12 @@ void PMManySupervisors::process_starter() {
         int stderrFd = open((task.str2 + ".err").c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
         if (stdoutFd < 0 || stderrFd < 0) {
-            std::cerr << "Error opening files for redirection." << std::endl;
-            return;
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Error opening files for redirection: %s", strerror(errno));
         }
         pid_t targetPid = fork();
         if (targetPid == -1) {
             Logger::getInstance().log(Logger::Verbosity::ERROR, "fork error: %s", strerror(errno));
+            return;
         }
 
         if (targetPid != 0) {   
@@ -189,10 +330,10 @@ void PMManySupervisors::process_starter() {
     Logger::getInstance().log(Logger::Verbosity::INFO, "Process starter: finished execution");
 }
 
-int PMManySupervisors::addRule(pid_t pid, Rule rule, std::vector<int> syscalls) {
+int ProcessManager::addRule(pid_t pid, Rule rule, std::vector<int> syscalls) {
     return supervisor->addRule(pid, rule, syscalls);
 }
 
-std::vector<int> PMManySupervisors::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) {
+std::vector<int> ProcessManager::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) {
     return supervisor->updateRules(pid, del_rules_id, new_rules);
 }

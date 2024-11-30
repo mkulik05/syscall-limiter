@@ -4,9 +4,11 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <thread>
 
-#include "../../SocketBridge/SocketBridge.h"
-#include "../../rules/rules.h"
+#include "../Supervisor/Manager/Supervisor.h"
+#include "../SocketBridge/SocketBridge.h"
+#include "../rules/rules.h"
 
 class ProcessManager {
     public:
@@ -14,19 +16,19 @@ class ProcessManager {
         virtual ~ProcessManager();
         
         // Adds process in suspended state, returns handle to it 
-        virtual pid_t addProcess(std::string cmd, std::string log_path) = 0;
+        pid_t addProcess(std::string cmd, std::string log_path);
 
         // Used to start process (it is added in suspended state)
-        virtual void startProcess(pid_t pid) = 0;
+        void startProcess(pid_t pid);
 
         // Terminate process
-        virtual void stopProcess(pid_t pid) = 0;
+        void stopProcess(pid_t pid);
 
         // Add new rule to process
-        virtual int addRule(pid_t pid, Rule rule, std::vector<int> syscalls) = 0; 
+        int addRule(pid_t pid, Rule rule, std::vector<int> syscalls); 
 
         // Remove some old rules and add a group of new ones
-        virtual std::vector<int> updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) = 0;
+        std::vector<int> updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules);
 
         // Sets memory and time limit for process 
         int setMemTime(pid_t pid, std::string maxMem, int maxTime);
@@ -37,7 +39,9 @@ class ProcessManager {
         // Pids of started processes
         std::vector<pid_t> startedPIDs;
         
-    protected:
+        Supervisor* supervisor;
+
+    private:
 
         void downgrade_privileges();
         
@@ -45,8 +49,16 @@ class ProcessManager {
         SocketBridge* task_bridge;
         SocketBridge* started_pids_bridge;
 
-    private:
+        pid_t process_starter_pid;
+
+        void process_starter();
+        void start_supervisor(pid_t starter_pid);
+        std::thread thread_supervisor, thread_process_starter;
+
+        bool runnable;
 
         std::unordered_map<int, std::string> map_cgroup;
         std::string cgroup_path;
+
+        
 };

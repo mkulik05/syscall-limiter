@@ -9,7 +9,7 @@
 #include "../../logic/rules/rules.h"
 #include "../../logic/Logger/Logger.h"
 #include "../ProcOutputW/ProcOutputW.h"
-#include "../../logic/ProcessManager/PMSingleSupervisor/PMSingleSupervisor.h"
+#include "../../logic/ProcessManager/ProcessManager.h"
 
 // extern const int GROUP_OFFSET;
 const int GROUP_OFFSET = 1024;
@@ -19,7 +19,7 @@ extern std::unordered_map<QString, int> syscallMap;
 
 MainW::MainW()
 {
-    process_manager = new PMManySupervisors();
+    process_manager = new ProcessManager();
 
     running_n = 0;
     processes_info = {};
