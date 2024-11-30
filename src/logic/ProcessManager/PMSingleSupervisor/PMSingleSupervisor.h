@@ -1,32 +1,31 @@
 #pragma once
 
 #include <fcntl.h>
-#include <string>
 #include <vector>
 #include <thread>
-#include "../../Supervisor/Manager/OneProcessSP/OneProcessSP.h"
+#include "../../Supervisor/Manager/ManyProcessesSP/ManyProcessesSP.h"
 #include "../PM/ProcessManager.h"
 
-class PMManySupervisors: public ProcessManager {
+class PMSingleSupervisor: public ProcessManager {
     public:
-        PMManySupervisors();
-        ~PMManySupervisors();
-
-        pid_t addProcess(std::string cmd, std::string log_path) override;
+        PMSingleSupervisor();
+        ~PMSingleSupervisor();
+        
+        int addProcess(std::string cmd, std::string log_path) override;
         void startProcess(pid_t pid) override;
         void stopProcess(pid_t pid) override;
 
         int addRule(pid_t pid, Rule rule, std::vector<int> syscalls) override; 
 
         std::vector<int> updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules) override;
+    
+    protected: 
+        void start_process(Strings & task, int & stdoutFd, int & stderrFd) override;
+        void prepare_starter() override;
 
-        OneProcessSP* supervisor;
-        
     private:
+        ManyProcessesSP* supervisor;
 
-        pid_t process_starter_pid;
-
-        void process_starter();
         void start_supervisor(pid_t starter_pid);
         std::thread thread_supervisor, thread_process_starter;
 

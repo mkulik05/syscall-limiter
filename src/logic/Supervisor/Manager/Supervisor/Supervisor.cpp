@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -27,14 +28,21 @@
 #include "../../../Logger/Logger.h"
 
 
-Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd_dis(0, 4294967295)
+Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd_dis(0, 2147483647)
 {
     runnable = true;
-    curr_syscalls_n = 0;
     add_handlers(this->map_handlers);
     this->starter_pid = starter_pid;
     semaphore = sem_open("/sync_access", O_CREAT, 0666, 1);
-    sem_init(semaphore, 0, 1);
+    if (semaphore == SEM_FAILED) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to open '/sync_access' semaphore: %s", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    int r = sem_init(semaphore, 0, 1);
+    if (r == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to init '/sync_access' semaphore: %s", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
     Logger::getInstance().log(Logger::Verbosity::INFO, "Supervisor initialized with starter PID: %d", starter_pid);
 }
 
@@ -58,7 +66,7 @@ void Supervisor::run(int notifyFd)
     while (runnable)
     {
         memset(req, 0, sizes.seccomp_notif);
-        // Logger::getInstance().log(Logger::Verbosity::DEBUG, "Waiting for notification on FD: %d", notifyFd);
+        Logger::getInstance().log(Logger::Verbosity::DEBUG, "Waiting for notification on FD: %d", notifyFd);
 
         if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1)
         {

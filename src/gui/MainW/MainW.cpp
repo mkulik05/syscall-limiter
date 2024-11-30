@@ -10,6 +10,7 @@
 #include "../../logic/Logger/Logger.h"
 #include "../ProcOutputW/ProcOutputW.h"
 #include "../../logic/ProcessManager/PMSingleSupervisor/PMSingleSupervisor.h"
+#include "../../logic/ProcessManager/PMManySupervisors/PMManySupervisors.h"
 
 // extern const int GROUP_OFFSET;
 const int GROUP_OFFSET = 1024;
@@ -19,7 +20,7 @@ extern std::unordered_map<QString, int> syscallMap;
 
 MainW::MainW()
 {
-    process_manager = new PMManySupervisors();
+    process_manager = new PMSingleSupervisor();
 
     running_n = 0;
     processes_info = {};
@@ -69,8 +70,8 @@ MainW::MainW()
     timer->setInterval(500);
     connect(timer, &QTimer::timeout, this, [=]()
             {
-        for (int i = 0; i < process_manager->startedPIDs.size(); i++) {
-            int pid = process_manager->startedPIDs[i];
+        for (int i = 0; i < process_manager->startedIDs.size(); i++) {
+            int pid = process_manager->startedIDs[i];
             bool res = process_manager->is_process_running(pid);
             if (!res) {
                 auto result = std::find_if(processes_info.begin(), processes_info.end(), [pid](ProcessInfo pi) {
@@ -89,7 +90,7 @@ MainW::MainW()
                     }
                 }
                 
-                process_manager->startedPIDs.erase(process_manager->startedPIDs.begin() + i);
+                process_manager->startedIDs.erase(process_manager->startedIDs.begin() + i);
                 i--;
             }
         } });

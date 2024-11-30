@@ -25,7 +25,6 @@ class Supervisor {
         virtual int addRuleUnsync(pid_t pid, Rule rule, std::vector<int> syscalls) = 0; 
         virtual void deleteRuleUnsync(int rule_id) = 0;
 
-        int curr_syscalls_n;
         pid_t starter_pid;
         
         // For sync access to data (between supervisor and rule editing thread)

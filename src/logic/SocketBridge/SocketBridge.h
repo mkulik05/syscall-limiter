@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 
 struct Strings {
     std::string str1;
