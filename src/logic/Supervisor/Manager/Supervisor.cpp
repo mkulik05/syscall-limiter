@@ -29,6 +29,67 @@
 #include "../handlers/handlers.h"
 #include "../../Logger/Logger.h"
 
+// Debug prints
+void printRuleType(RuleType type)
+{
+    switch (type)
+    {
+    case DENY_PATH_ACCESS:
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Type: DENY_PATH_ACCESS");
+        break;
+    case DENY_ALWAYS:
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Type: DENY_ALWAYS");
+        break;
+    case ALLOW_WITH_LOG:
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Type: ALLOW_WITH_LOG");
+        break;
+    }
+}
+
+void printMap(const std::map<int, std::vector<Rule>> &myMap)
+{
+    for (const auto &pair : myMap)
+    {
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Key: %d", pair.first);
+        for (const auto &rule : pair.second)
+        {
+            Logger::getInstance().log(Logger::Verbosity::INFO, "  Rule ID: %d, Type: ", rule.rule_id);
+            printRuleType(rule.type);
+            Logger::getInstance().log(Logger::Verbosity::INFO, ", Path: %s", rule.path.c_str());
+        }
+    }
+}
+
+void printMap2(const std::map<int, MapHandler> &myMap)
+{
+    for (const auto &pair : myMap)
+    {
+        Logger::getInstance().log(Logger::Verbosity::INFO, "K: %d", pair.first);
+    }
+}
+
+void printMap3(const std::unordered_map<int, std::unordered_map<int, std::vector<Rule>>> &myMap)
+{
+    for (const auto &pidPair : myMap)
+    {
+        int pid = pidPair.first;
+        Logger::getInstance().log(Logger::Verbosity::INFO, "Process PID: %d", pid);
+        
+        for (const auto &innerPair : pidPair.second)
+        {
+            int key = innerPair.first;
+            Logger::getInstance().log(Logger::Verbosity::INFO, "  Key: %d", key);
+            
+            for (const auto &rule : innerPair.second)
+            {
+                Logger::getInstance().log(Logger::Verbosity::INFO, "    Rule ID: %d, Type: ", rule.rule_id);
+                printRuleType(rule.type);
+                Logger::getInstance().log(Logger::Verbosity::INFO, ", Path: %s\n", rule.path.c_str());
+            }
+        }
+    }
+}
+
 
 #define ALLOWED_SYSCALLS_N 6
 
@@ -111,11 +172,20 @@ void Supervisor::deleteRule(int rule_id)
     sem_post(this->semaphore);
 }
 
+void Supervisor::PIDTreeAddRule(std::vector<int> *res, pid_t pid, Rule rule, std::vector<int> syscalls) {
+    (*res).push_back(this->addRuleUnsync(pid, rule, syscalls));
+    if (map_pids_tree.count(pid) > 0) {
+        for (int child_pid: map_pids_tree[pid]) {
+            PIDTreeAddRule(res, child_pid, rule, syscalls); 
+        }  
+    }
+}
 
 std::vector<int> Supervisor::updateRules(pid_t pid, std::vector<int> del_rules_id, std::vector<std::pair<Rule, std::vector<int>>> new_rules)
 {
-
-
+    
+    printMap3(map_all_rules);
+    Logger::getInstance().log(Logger::Verbosity::INFO, "----------------------------------------");
     std::vector<int> res = {};
     sem_wait(this->semaphore);
 
@@ -125,11 +195,12 @@ std::vector<int> Supervisor::updateRules(pid_t pid, std::vector<int> del_rules_i
     }
 
     for (int i = 0; i < new_rules.size(); i++)
-    {
-        res.push_back(this->addRuleUnsync(pid, new_rules[i].first, new_rules[i].second));
+    {        
+        PIDTreeAddRule(&res, pid, new_rules[i].first, new_rules[i].second);
     }
 
     sem_post(this->semaphore);
+    printMap3(map_all_rules);
     return res;
 }
 
@@ -231,6 +302,12 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
                         int r_id = map_pid_rules[pid][i];
                         map_rules_info[r_id].pids.push_back(req->pid);
                     }
+
+                    if (map_pids_tree.count(pid) == 0) {
+                        map_pids_tree[pid] = {};
+                    }
+
+                    map_pids_tree[pid].push_back(req->pid);
                     break;
                 }
             }
@@ -250,6 +327,12 @@ void Supervisor::handle_syscall(seccomp_notif *req, seccomp_notif_resp *resp, in
                     int r_id = map_pid_rules[req->pid][i];
                     map_rules_info[r_id].pids.push_back(req->pid);
                 }
+
+                if (map_pids_tree.count(pid) == 0) {
+                        map_pids_tree[pid] = {};
+                }
+
+                map_pids_tree[pid].push_back(req->pid);
                 break;
             }
         }
@@ -360,66 +443,6 @@ void Supervisor::ruleInit(pid_t pid) {
 
 
 
-// Debug prints
-void printRuleType(RuleType type)
-{
-    switch (type)
-    {
-    case DENY_PATH_ACCESS:
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Type: DENY_PATH_ACCESS");
-        break;
-    case DENY_ALWAYS:
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Type: DENY_ALWAYS");
-        break;
-    case ALLOW_WITH_LOG:
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Rule Type: ALLOW_WITH_LOG");
-        break;
-    }
-}
-
-void printMap(const std::map<int, std::vector<Rule>> &myMap)
-{
-    for (const auto &pair : myMap)
-    {
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Key: %d", pair.first);
-        for (const auto &rule : pair.second)
-        {
-            Logger::getInstance().log(Logger::Verbosity::INFO, "  Rule ID: %d, Type: ", rule.rule_id);
-            printRuleType(rule.type);
-            Logger::getInstance().log(Logger::Verbosity::INFO, ", Path: %s", rule.path.c_str());
-        }
-    }
-}
-
-void printMap2(const std::map<int, MapHandler> &myMap)
-{
-    for (const auto &pair : myMap)
-    {
-        Logger::getInstance().log(Logger::Verbosity::INFO, "K: %d", pair.first);
-    }
-}
-
-void printMap3(const std::unordered_map<int, std::map<int, std::vector<Rule>>> &myMap)
-{
-    for (const auto &pidPair : myMap)
-    {
-        int pid = pidPair.first;
-        Logger::getInstance().log(Logger::Verbosity::INFO, "Process PID: %d", pid);
-        
-        for (const auto &innerPair : pidPair.second)
-        {
-            int key = innerPair.first;
-            Logger::getInstance().log(Logger::Verbosity::INFO, "  Key: %d", key);
-            
-            for (const auto &rule : innerPair.second)
-            {
-                Logger::getInstance().log(Logger::Verbosity::INFO, "    Rule ID: %d, Type: ", rule.rule_id);
-                printRuleType(rule.type);
-                Logger::getInstance().log(Logger::Verbosity::INFO, ", Path: %s\n", rule.path.c_str());
-            }
-        }
-    }
-}
 
 
 void printRuleInfo(const std::unordered_map<int, RuleInfo> &map_rules_info) {

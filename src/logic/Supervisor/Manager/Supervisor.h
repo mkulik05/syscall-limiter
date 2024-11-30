@@ -53,4 +53,8 @@ class Supervisor {
         // {pid: [rule_id1, rule_id2] ..}
         // Used for speeding up duplication of data in map_rules_ids
         std::unordered_map<int, std::vector<int>> map_pid_rules;
+
+        // {parent_pid1: [child_pid1, child_pid2] ..}
+        std::unordered_map<int, std::vector<int>> map_pids_tree;
+        void PIDTreeAddRule(std::vector<int> *res, pid_t pid, Rule rule, std::vector<int> syscalls);
 };

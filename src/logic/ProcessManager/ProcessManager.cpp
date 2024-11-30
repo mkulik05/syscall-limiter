@@ -218,6 +218,7 @@ void ProcessManager::downgrade_privileges() {
     if (pw->pw_dir) {
         setenv("HOME", pw->pw_dir, 1);
     }
+
 }
 
 
