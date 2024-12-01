@@ -21,6 +21,7 @@ AddSyscallsW::AddSyscallsW(QWidget *parent, QStringList syscalls) : QDialog(pare
     layout->addWidget(comboBox);
 
     listWidget = new QListWidget(this);
+    listWidget->setToolTip("Double click element to delete it");
     layout->addWidget(listWidget);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();

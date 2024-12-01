@@ -58,10 +58,12 @@ private slots:
     void menuAddRule();
     void menuSaveRules();
     void menuImportRule(const std::string &ruleName);
+    void menuDeleteRule(const std::string &ruleName);
    
 private:
     void TableCellDoubleClicked(int row, int column);
     QMenu *importMenu;
+    QMenu *deleteMenu;
     QLineEdit *progNameEdit;
     QLineEdit *progPathEdit;
     

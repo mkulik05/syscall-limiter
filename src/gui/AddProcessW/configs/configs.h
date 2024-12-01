@@ -28,3 +28,5 @@ struct ConfigRules {
 int saveConfigRules(const ConfigRules& config, const std::string& filename);
 
 std::unordered_map<std::string, ConfigRules> getAllRules();
+
+int deleteSavedRule(const std::string& filename);

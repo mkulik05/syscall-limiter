@@ -1,4 +1,5 @@
 #include "configs.h"
+#include <unistd.h>
 
 std::string conf_path = "/home/mkul1k/.config";
 std::string fold_name = "syscall-limiter";
@@ -127,4 +128,10 @@ std::unordered_map<std::string, ConfigRules> getAllRules() {
     }
 
     return res; 
+}
+
+
+int deleteSavedRule(const  std::string& filename) {
+    std::string base_path = conf_path + "/" + fold_name;
+    return unlink((base_path + "/" + filename).c_str());
 }

@@ -54,12 +54,22 @@ AddProcessDialog::AddProcessDialog(QWidget *parent) : QDialog(parent)
 
     importMenu = rulesMenu->addMenu("Import");
 
+    deleteMenu = rulesMenu->addMenu("Delete");
+
     for (std::pair<std::string, ConfigRules> ruleset : all_rulesets)
     {
         QAction *importAction = new QAction(QString::fromStdString(ruleset.second.name), this);
         connect(importAction, &QAction::triggered, [this, ruleset]()
                 { menuImportRule(ruleset.first); });
+        
+        importAction->setData(QString::fromStdString(ruleset.first)); 
         importMenu->addAction(importAction);
+
+        QAction *deleteAction = new QAction(QString::fromStdString(ruleset.second.name), this);
+        connect(deleteAction, &QAction::triggered, [this, ruleset]()
+                { menuDeleteRule(ruleset.first); });
+        deleteAction->setData(QString::fromStdString(ruleset.first));                
+        deleteMenu->addAction(deleteAction);
     }
 
     layout->setMenuBar(menuBar);
@@ -348,6 +358,13 @@ void AddProcessDialog::menuAddRule()
 
 void AddProcessDialog::menuSaveRules()
 {
+    int n = rulesTable->rowCount();
+    
+    if (n == 0) {
+        QMessageBox::information(this, "Saving failed", "No rules to save");
+        return;
+    }
+
     bool ok;
     QString name = QInputDialog::getText(this, tr("Save Rules"),
                                          tr("Enter rule name:"), QLineEdit::Normal,
@@ -391,6 +408,12 @@ void AddProcessDialog::menuSaveRules()
             connect(importAction, &QAction::triggered, [this, unix_time]()
                     { menuImportRule(std::to_string(unix_time)); });
             importMenu->addAction(importAction);
+
+            QAction *deleteAction = new QAction(name, this);
+            connect(deleteAction, &QAction::triggered, [this, unix_time]()
+                    { menuDeleteRule(std::to_string(unix_time)); });
+            deleteMenu->addAction(deleteAction);
+
             all_rulesets[std::to_string(unix_time)] = resConfig;
         }
     }
@@ -442,4 +465,37 @@ void AddProcessDialog::menuImportRule(const std::string &ruleIDStr)
         i++;
     }
     QMessageBox::information(this, "Importing finished", "Imported " + QString::number(i) + " rules");
+}
+
+void AddProcessDialog::menuDeleteRule(const std::string &ruleIDStr)
+{
+    int rule_n = all_rulesets[ruleIDStr].rules.size();
+    QString message = QString("Are you sure you want to delete this ruleset?\nIt contains %1 rule(s)").arg(rule_n);
+
+    int reply = QMessageBox::question(this, "Confirm Deletion", message,
+                                  QMessageBox::Yes | QMessageBox::No);
+    
+    if (reply == QMessageBox::No) {
+        return;
+    }
+
+    
+    for (QAction *action : deleteMenu->actions()) {
+        if (action->data().toString().toStdString() == ruleIDStr) {
+            deleteMenu->removeAction(action); 
+            delete action;
+            break;
+        }
+    }
+
+    for (QAction *action : importMenu->actions()) {
+        if (action->data().toString().toStdString() == ruleIDStr) {
+            importMenu->removeAction(action); 
+            delete action;
+            break;
+        }
+    }
+
+    all_rulesets.erase(ruleIDStr);
+    deleteSavedRule(ruleIDStr);
 }

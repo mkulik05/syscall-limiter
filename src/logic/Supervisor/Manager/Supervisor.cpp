@@ -93,7 +93,7 @@ void printMap3(const std::unordered_map<int, std::unordered_map<int, std::vector
 
 #define ALLOWED_SYSCALLS_N 6
 
-Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd_dis(0, 4294967295)
+Supervisor::Supervisor(pid_t starter_pid) : rnd_gen(std::random_device{}()), rnd_dis(0, 2147483647)
 {
     runnable = true;
     curr_syscalls_n = 0;
