@@ -23,7 +23,7 @@ MainW::MainW()
 
     running_n = 0;
     processes_info = {};
-    setWindowTitle("Element List");
+    setWindowTitle("Process Manager");
 
     QVBoxLayout *layout = new QVBoxLayout(this);
 

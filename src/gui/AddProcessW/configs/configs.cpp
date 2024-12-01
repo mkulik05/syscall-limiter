@@ -1,11 +1,25 @@
 #include "configs.h"
+#include "../../../logic/Logger/Logger.h"
+#include <string>
 #include <unistd.h>
+#include <cstdlib>
 
-std::string conf_path = "/home/mkul1k/.config";
+std::string conf_path = ".config";
 std::string fold_name = "syscall-limiter";
-
+bool inited_conf_path = false;
 
 int init() {
+    if (!inited_conf_path) {
+        inited_conf_path = true;
+        const char* homeDir = getenv("HOME");
+        if (!homeDir) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "failed to get such env");
+            return -1;
+        }
+        Logger::getInstance().log(Logger::Verbosity::DEBUG, "Home folder: %s", homeDir);
+        std::string str(homeDir);
+        conf_path = str + "/" + conf_path;
+    }
     struct stat buffer;
     bool conf_exists = stat(conf_path.c_str(), &buffer) == 0;
 

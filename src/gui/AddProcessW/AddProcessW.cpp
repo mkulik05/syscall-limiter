@@ -5,7 +5,6 @@
 #include <QPushButton>
 #include <QInputDialog>
 #include <QComboBox>
-#include <iostream>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QDebug>
@@ -17,6 +16,7 @@
 #include <QIntValidator>
 #include <QMenu>
 #include <QMenuBar>
+#include "../../logic/Logger/Logger.h"
 
 #include "../AddSyscallsW/AddSyscallsW.h"
 
@@ -359,7 +359,7 @@ void AddProcessDialog::menuAddRule()
 void AddProcessDialog::menuSaveRules()
 {
     int n = rulesTable->rowCount();
-    
+
     if (n == 0) {
         QMessageBox::information(this, "Saving failed", "No rules to save");
         return;

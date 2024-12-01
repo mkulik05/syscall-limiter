@@ -8,8 +8,6 @@
 #include <cstring>
 #include <QDebug>
 
-#include "../../../logic/Logger/Logger.h"
-
 extern std::string conf_path;
 extern std::string fold_name;
 
