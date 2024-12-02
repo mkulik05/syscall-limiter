@@ -31,14 +31,14 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd,
 
 int getPathWithCWD(seccomp_notif *req, seccomp_notif_resp *resp, char path[PATH_MAX]);
 
-void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rule>& rules) {
+int checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rule>& rules) {
     for (int i = 0; i < rules.size(); i++) {
         Rule rule = rules[i];
         switch (rule.type) {
         case DENY_ALWAYS:
             resp->error = -EACCES;
             resp->flags = 0;
-            return;
+            return -1;
 
         case DENY_PATH_ACCESS:
             // Logger::getInstance().log(Logger::Verbosity::ERROR, "checkPathesRule: path: %s, rule path: %s", path.c_str(), rule.path.c_str());
@@ -47,11 +47,12 @@ void checkPathesRule(std::string path, seccomp_notif_resp *resp, std::vector<Rul
                   path[rule.path.size()] == '/') {
                 resp->error = -EACCES;
                 resp->flags = 0;
-                return;
+                return -1;
             }
             break;
         }   
     }
+    return 0;
 }
 std::string getProcessCWD(pid_t pid) {
     std::string cwdPath = "/proc/" + std::to_string(pid) + "/cwd";
@@ -84,32 +85,44 @@ int getRealPath(const char* src_path, char* buf) {
     return 0;
 }
 
-void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+int check_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules, int path_i) {
     
     char path[PATH_MAX];
 
-    bool pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
+    bool pathOK = getTargetPathname(req, notifyFd, path_i, path, sizeof(path));
 
     if (!pathOK) {
         resp->error = -EINVAL;
         resp->flags = 0;
-        return;
+        return -1;
     }
 
     if (path[0] != '/') {
         if (getPathWithCWD(req, resp, path) == -1) {
-            return;
+            return -1;
         }
     }
 
     checkPathesRule(path, resp, rules);
+    return 0;
 }
 
-void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+
+void handle_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    check_path_restriction(req, resp, notifyFd, rules, 0);
+}
+
+void handle_path2x_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    int r = check_path_restriction(req, resp, notifyFd, rules, 0);
+    if (r == -1) return;
+    check_path_restriction(req, resp, notifyFd, rules, 1);
+}
+
+int check_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules, int param_n) {
     bool pathOK;
     char path[PATH_MAX];
 
-    int fd = req->data.args[0];
+    int fd = req->data.args[param_n];
     char fdPath[PATH_MAX];
 
     snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
@@ -119,21 +132,33 @@ void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int not
 
     if (nread == -1) {
         Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to read link for FD: %d", fd);
-        return;
+        resp->error = -EINVAL;
+        resp->flags = 0;
+        return -1;
     }
-    checkPathesRule(path, resp, rules);
+    return checkPathesRule(path, resp, rules);
 }
 
-void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+void handle_fd_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    check_fd_restriction(req, resp, notifyFd, rules, 0);
+}
+
+void handle_fd2x_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    int r = check_fd_restriction(req, resp, notifyFd, rules, 0);
+    if (r == -1) return;
+    check_fd_restriction(req, resp, notifyFd, rules, 1);
+}
+
+int check_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules, int start_i) {
     char path[PATH_MAX];
-    int dirfd = req->data.args[0]; // dirfd
+    int dirfd = req->data.args[start_i]; // dirfd
     char path_arg2[PATH_MAX];
-    bool pathOK = getTargetPathname(req, notifyFd, 1, path_arg2, sizeof(path_arg2));
+    bool pathOK = getTargetPathname(req, notifyFd, start_i + 1, path_arg2, sizeof(path_arg2));
 
     if (!pathOK) {
         resp->error = -EINVAL;
         resp->flags = 0;
-        return;
+        return -1;
     }
 
     Logger::getInstance().log(Logger::Verbosity::DEBUG, "Openat syscall: ");
@@ -141,7 +166,7 @@ void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, in
 
         if (path[0] != '/') {
             if (getPathWithCWD(req, resp, path) == -1)
-                return;
+                return -1;
         }
 
         Logger::getInstance().log(Logger::Verbosity::INFO, "Path_arg2: %s, Res path: %s", path_arg2, path);            
@@ -152,17 +177,27 @@ void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, in
         if (nread == -1) {
             resp->error = -EBADF;
             resp->flags = 0;
-            return;
+            return -1;
         }
         path[nread] = '\0'; 
         if (realpath((std::string(path) + "/" + std::string(path_arg2)).c_str(), path) == nullptr) {
             resp->error = -ENOENT;
             resp->flags = 0;
-            return;
+            return -1;
         }
     }
 
-    checkPathesRule(path, resp, rules);
+    return checkPathesRule(path, resp, rules);
+}
+
+void handle_fd_path_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    check_fd_path_restriction(req, resp, notifyFd, rules, 0);
+}
+
+void handle_fd_path2x_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
+    int r = check_fd_path_restriction(req, resp, notifyFd, rules, 0);
+    if (r == -1) return;
+    check_fd_path_restriction(req, resp, notifyFd, rules, 2);
 }
 
 int getPathWithCWD(seccomp_notif *req, seccomp_notif_resp *resp, char path[PATH_MAX])
@@ -235,74 +270,6 @@ bool getTargetPathname(struct seccomp_notif *req, int notifyFd, int argNum, char
 }
 
 
-void handle_get_dents_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
-    bool pathOK;
-    char path[PATH_MAX];
-
-    int fd = req->data.args[0];
-    char fdPath[PATH_MAX];
-
-    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
-    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
-    if (nread != -1)
-        path[nread] = '\0'; 
-
-    if (nread == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to read link for FD: %d", fd);
-        return;
-    }
-    Logger::getInstance().log(Logger::Verbosity::INFO, "GET DENTS, path: %s", path);
-    Logger::getInstance().log(Logger::Verbosity::INFO, "before: write resp flags: %d, error: %d", resp->flags, resp->error);
-    std::string path_str(path);
-    checkPathesRule(path_str, resp, rules);
-    Logger::getInstance().log(Logger::Verbosity::INFO, "write resp flags: %d, error: %d", resp->flags, resp->error);
-}
-
-
-void handle_write_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
-    
-    bool pathOK;
-    char path[PATH_MAX];
-
-    int fd = req->data.args[0];
-    char fdPath[PATH_MAX];
-
-    snprintf(fdPath, sizeof(fdPath), "/proc/%d/fd/%d", req->pid, fd);
-    ssize_t nread = readlink(fdPath, path, sizeof(path) - 1);
-    if (nread != -1)
-        path[nread] = '\0'; 
-
-    if (nread == -1) {
-        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to read link for FD: %d", fd);
-        return;
-    }
-    Logger::getInstance().log(Logger::Verbosity::INFO, "Target write path: %s", path);
-    Logger::getInstance().log(Logger::Verbosity::INFO, "before: write resp flags: %d, error: %d", resp->flags, resp->error);
-    std::string path_str(path);
-    checkPathesRule(path_str, resp, rules);
-    Logger::getInstance().log(Logger::Verbosity::INFO, "write resp flags: %d, error: %d", resp->flags, resp->error);
-}
-
-void handle_mkdir_restriction(seccomp_notif *req, seccomp_notif_resp *resp, int notifyFd, std::vector<Rule>& rules) {
-    
-    char path[PATH_MAX];
-
-    bool pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
-    if (!pathOK) {
-        resp->error = -EINVAL;
-        resp->flags = 0;
-        return;
-    }
-
-    if (path[0] != '/') {
-        if (getPathWithCWD(req, resp, path) == -1) {
-            return;
-        }
-    }
-
-    checkPathesRule(path, resp, rules);
-}
-
 void add_handlers(std::unordered_map<int, MapHandler>& map) {
     
     map[SYS_open] = handle_path_restriction;
@@ -317,20 +284,24 @@ void add_handlers(std::unordered_map<int, MapHandler>& map) {
     map[SYS_faccessat] = handle_fd_path_restriction;
     map[SYS_faccessat2] = handle_fd_path_restriction;
     
-    // add rename, renameat, renameat2
-    
-    map[SYS_mkdir] = handle_mkdir_restriction;
+    map[SYS_rename] = handle_path2x_restriction;
+    map[SYS_renameat] = handle_fd_path2x_restriction;
+    map[SYS_renameat2] = handle_fd_path2x_restriction;
+
+    map[SYS_mkdir] = handle_path_restriction;
     map[SYS_mkdirat] = handle_fd_path_restriction;
     map[SYS_rmdir] = handle_path_restriction;
     map[SYS_creat] = handle_path_restriction;
     
-    // link, linkat
+    map[SYS_link] = handle_path2x_restriction;
+    map[SYS_linkat] = handle_fd_path2x_restriction;
     
     map[SYS_unlink] = handle_path_restriction;
     map[SYS_unlinkat] = handle_fd_path_restriction;
     
-    // symlink, symlinkat
-    
+    map[SYS_symlink] = handle_path2x_restriction;
+    map[SYS_symlinkat] = handle_fd_path2x_restriction;
+
     map[SYS_readlink] = handle_path_restriction;
     map[SYS_readlinkat] = handle_fd_path_restriction;
     
@@ -351,7 +322,7 @@ void add_handlers(std::unordered_map<int, MapHandler>& map) {
     map[SYS_statfs] = handle_path_restriction;
     map[SYS_fstatfs] = handle_fd_restriction;
     
-    // mount
+    map[SYS_mount] = handle_path2x_restriction;
 
     map[SYS_umount2] = handle_path_restriction;
     
@@ -370,13 +341,12 @@ void add_handlers(std::unordered_map<int, MapHandler>& map) {
     map[SYS_read] = handle_fd_restriction;
     map[SYS_write] = handle_fd_restriction;
 
-    map[SYS_getdents] = handle_get_dents_restriction;
-    map[SYS_getdents64] = handle_get_dents_restriction;
-    map[SYS_read] = handle_get_dents_restriction;
+    map[SYS_getdents] = handle_fd_path_restriction;
+    map[SYS_getdents64] = handle_fd_path_restriction;
 
     map[SYS_lseek] = handle_fd_restriction;
     map[SYS_fsync] = handle_fd_restriction;
     map[SYS_flock] = handle_fd_restriction;
-    map[SYS_sendfile] = handle_fd_restriction;
+    map[SYS_sendfile] = handle_fd2x_restriction;
 
 }
