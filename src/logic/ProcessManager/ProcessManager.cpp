@@ -44,12 +44,6 @@ std::string getCgroupMountPoint();
 ProcessManager::~ProcessManager() {
     delete this->started_pids_bridge;
     delete this->fd_bridge;
-    for (const auto& pair : map_cgroup) {
-        int res = rmdir(pair.second.c_str());
-        if (res != 0) {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to remove cgroup: %s", strerror(errno));
-        } 
-    }
     
     kill(this->process_starter_pid, SIGTERM);
     for (int i = 0; i < this->startedPIDs.size(); i++) {
@@ -62,6 +56,13 @@ ProcessManager::~ProcessManager() {
     runnable = false;
     pthread_kill(this->thread_process_starter.native_handle(), SIGINT);
     this->thread_process_starter.join();
+
+    for (const auto& pair : map_cgroup) {
+        int res = rmdir(pair.second.c_str());
+        if (res != 0) {
+            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to remove cgroup: %s", strerror(errno));
+        } 
+    }
 }
 
 ProcessManager::ProcessManager()
