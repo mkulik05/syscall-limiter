@@ -240,6 +240,8 @@ void MainW::editElement(QTableWidgetItem *item)
             std::vector<int> rules_ids = process_manager->updateRules(processes_info[row].pid, old_rules_ids, new_rules_info);
             processes_info[row].rules = new_rules;
             processes_info[row].rules_ids = QVector<int>(rules_ids.begin(), rules_ids.end());
+            processes_info[row].maxMem = maxMem;
+            processes_info[row].maxTime = maxTime;
         }
     }
 }
