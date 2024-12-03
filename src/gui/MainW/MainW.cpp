@@ -17,6 +17,17 @@ extern std::unordered_map<int, QString> invertedSyscallMap;
 extern std::unordered_map<QString, QStringList> groups;
 extern std::unordered_map<QString, int> syscallMap;
 
+void removeLogs(std::string log_path) {
+    if (unlink((log_path + ".err").c_str()) != 0)
+    {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to delete stderr log: %s", strerror(errno));
+    }
+    if (unlink((log_path + ".out").c_str()) != 0)
+    {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to delete stdout log: %s", strerror(errno));
+    }
+}
+
 MainW::MainW()
 {
     process_manager = new ProcessManager();
@@ -55,9 +66,11 @@ MainW::MainW()
                     running_n--;
                     process_manager->stopProcess(processes_info[row].pid);
                     tableWidget->removeRow(row);
+                    removeLogs(processes_info[row].log_path);
                     processes_info.erase(processes_info.begin() + row);
                 }
             } else {
+                removeLogs(processes_info[row].log_path);
                 tableWidget->removeRow(row);
                 processes_info.erase(processes_info.begin() + row);
              }
@@ -100,14 +113,7 @@ MainW::~MainW()
 {
     for (int i = 0; i < processes_info.size(); i++)
     {
-        if (unlink((processes_info[i].log_path + ".err").c_str()) != 0)
-        {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to delete stderr log: %s", strerror(errno));
-        }
-        if (unlink((processes_info[i].log_path + ".out").c_str()) != 0)
-        {
-            Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to delete stdout log: %s", strerror(errno));
-        }
+        removeLogs(processes_info[i].log_path);
     }
     delete process_manager;
 }

@@ -171,6 +171,15 @@ int ProcessManager::setMemTime(pid_t pid, std::string maxMem, int maxTime) {
         return -1;
     }
 
+    int totalCpuTime = 100000;
+    int cpuLimit = (maxTime * totalCpuTime) / 100; 
+
+    std::string cpuLimitStr = std::to_string(cpuLimit) + " 100000";
+    if(writeToFile(path + "/cpu.max", cpuLimitStr) == -1) {
+        Logger::getInstance().log(Logger::Verbosity::ERROR, "Failed to set cgroup cpu.max: %s", strerror(errno));
+        return -1;
+    }
+
     return 0;
 }
 
