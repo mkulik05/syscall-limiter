@@ -233,9 +233,16 @@ QVector<RuleInfoGui> AddProcessDialog::getRules() const
             res_syscalls.append(syscallMap[words[i]]);
         }
 
+        QString str = restrictPathes[row]->text();
+
+
+        if (str.endsWith('/')) {
+            str.chop(1); 
+        }
+
         res.append({res_syscalls,
                     ruleTypeSels[row]->currentIndex() == 0,
-                    restrictPathes[row]->text()});
+                    str});
     }
     return res;
 }
